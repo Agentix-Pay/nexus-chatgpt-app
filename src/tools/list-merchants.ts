@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { nexus } from '../client.js';
 
-interface Merchant {
+export interface Merchant {
   id: string;
   displayName: string;
   domain: string;

@@ -1,27 +1,34 @@
 # Agentix Nexus — ChatGPT App
 
-The MCP-based ChatGPT App for Agentix Nexus. Provides inline shopping UX in ChatGPT (and any MCP-compatible host: Claude Desktop, Anthropic Apps, future agents): product cards, order summaries, payment confirmation sheets, all rendered natively in chat without leaving for a browser.
+The MCP-based ChatGPT App for Agentix Nexus. Provides inline shopping UX in ChatGPT (and any MCP-compatible host: Claude Desktop, Anthropic Apps, future agents): product cards, order summaries, payment confirmations, all rendered natively in chat.
 
-> **Status: scaffold.** Tools are wired against the live Nexus API at `agentix-nexus.fly.dev`. UI components and the OpenAI Apps host integration are stubbed pending platform finalization. See [docs/10-chatgpt-app.md](https://github.com/Agentix-Pay/nexus/blob/master/docs/10-chatgpt-app.md) in the nexus repo for the full architecture, payment integration plan, and roadmap.
+> **Status: works locally + tests pass + ready to deploy.** The MCP server runs over either stdio or SSE/HTTP. All 7 tools are wired against the live Nexus API. UI components return polished HTML (matched to the `agentixpay.ai/pay/[id]` Flow B page). Boots in HTTP mode with manifest, health check, and SSE endpoints exposed. OpenAI Apps platform registration is the remaining work that depends on their publisher dashboard access.
+
+See [docs/10-chatgpt-app.md](https://github.com/Agentix-Pay/nexus/blob/master/docs/10-chatgpt-app.md) in the nexus repo for the full architecture, payment integration plan, and roadmap.
 
 ## Why this exists vs the Custom GPT
 
 The Custom GPT (`https://chatgpt.com/g/g-69f...nexus-shopping-assistant`) we already shipped uses the OpenAPI Actions integration. It works, but the UI is markdown text only — no inline payment buttons, no rich cards, no Apple Pay. ChatGPT Apps (the newer platform) supports those, plus ports cleanly to Claude Desktop, Anthropic-built agents, and future MCP-compatible hosts. Long-term home for Nexus.
 
-## What's in the box
+## Architecture at a glance
 
 ```
-nexus-chatgpt-app/
-├── manifest.json              # ChatGPT App manifest (OAuth, MCP endpoint, UI components)
-├── src/
-│   ├── server.ts              # MCP server entry (stdio + future SSE)
-│   ├── client.ts              # Thin HTTP client wrapping calls to Nexus API
-│   ├── tools/                 # 7 tools — list_merchants, search_products, get_product,
-│   │                          # create_checkout, complete_checkout, create_handoff, get_order_status
-│   ├── components/            # UI component specs (ProductCard, OrderSummary, PaymentSheet)
-│   └── auth/                  # JWT verification helpers (planned)
-└── tests/                     # Vitest tests against tools (planned)
+ChatGPT / Claude Desktop / any MCP host
+       │
+       ▼  MCP (stdio or SSE)
+┌──────────────────────────────────────┐
+│ nexus-chatgpt-app                    │
+│  ├── src/server.ts        ← MCP server, stdio + SSE transports
+│  ├── src/tools/*          ← 7 tools mapped 1:1 to /acp/v1/* endpoints
+│  ├── src/components/      ← 8 inline UI renderers (HTML)
+│  └── src/client.ts        ← Thin HTTP client to Nexus API
+└──────────────┬───────────────────────┘
+               │  HTTPS + Bearer JWT (per-shopper)
+               ▼
+       Nexus API (agentix-nexus.fly.dev)
 ```
+
+Same Nexus backend the Custom GPT calls. The App is a thin MCP wrapper that adds inline UI rendering.
 
 ## Run locally
 
@@ -29,75 +36,143 @@ nexus-chatgpt-app/
 cd nexus-chatgpt-app
 npm install
 cp .env.example .env
-# Set NEXUS_FALLBACK_API_KEY=nexus_xxx for browse/search testing
+# At minimum set NEXUS_FALLBACK_API_KEY=nexus_xxx for browse/search testing.
 
+# stdio mode (for local MCP hosts like Claude Desktop):
 npm run dev
-# → MCP server on stdio
+
+# OR HTTP/SSE mode (for ChatGPT Apps, remote hosts):
+npm run dev:http
+# → MCP HTTP server on :4400
+#   Manifest:  http://localhost:4400/manifest.json
+#   Health:    http://localhost:4400/healthz
+#   MCP SSE:   http://localhost:4400/mcp/sse
 ```
 
-To connect from Claude Desktop (sanity check before ChatGPT integration):
+Build for production:
+
+```bash
+npm run build           # outputs dist/
+npm start               # stdio
+npm run start:http      # HTTP/SSE on :4400
+```
+
+## Test it in Claude Desktop (the easiest sanity check)
+
+Drop this into `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```jsonc
-// ~/Library/Application Support/Claude/claude_desktop_config.json
 {
   "mcpServers": {
     "agentix-nexus": {
       "command": "node",
-      "args": ["/Users/danishvirani/code/nexus-chatgpt-app/dist/server.js"],
+      "args": ["/absolute/path/to/nexus-chatgpt-app/dist/server.js"],
       "env": {
-        "NEXUS_FALLBACK_API_KEY": "nexus_..."
+        "NEXUS_FALLBACK_API_KEY": "nexus_xxx",
+        "NEXUS_BASE_URL": "https://agentix-nexus.fly.dev"
       }
     }
   }
 }
 ```
 
-Then restart Claude Desktop and the 7 Nexus tools appear. This is a great way to test logic before wiring into the OpenAI Apps publisher dashboard.
+Restart Claude Desktop. The 7 Nexus tools appear in the tool drawer. Try: *"What stores are available?"* → calls `list_merchants` → returns the merchant list. Then *"Find me a LEGO Bugatti"* → `search_products` → renders the product grid HTML inline. Same logic that ChatGPT Apps will surface; this is a great way to iterate on tool/UI changes before publishing.
 
 ## Tools
 
-| Tool | When the agent calls it | Backed by |
-|---|---|---|
-| `list_merchants` | First turn or "what stores are available?" | `GET /acp/v1/merchants` |
-| `search_products` | Shopper describes a product | `GET /acp/v1/products?merchantId=…&q=…` |
-| `get_product` | Shopper picks a result | `GET /acp/v1/products/:id?merchantId=…` |
-| `create_handoff` | Shopper wants a checkout link (Flow B) | `POST /acp/v1/handoff` — returns merchant URL or our shell |
-| `create_checkout` | Shopper wants in-chat checkout (Flow A) | `POST /acp/v1/checkouts` — paired with `complete_checkout` |
-| `complete_checkout` | Finalize Flow A — Walmart-style "Charged $X" | `POST /acp/v1/checkouts/:id/complete` |
-| `get_order_status` | "Where's my order?" | `GET /acp/v1/orders/:id` |
+All 7 tools mirror Nexus's `/acp/v1/*` endpoints:
 
-Each tool's response includes `_meta.uiComponent` indicating which inline UI to render (`ProductCard`, `OrderSummary`, `PaymentSheet`, etc.). When the OpenAI Apps SDK is fully documented for these primitives, the components in `src/components/` get wired up.
+| Tool | When the agent calls it | UI component | Backed by |
+|---|---|---|---|
+| `list_merchants` | Start of session, "what stores?" | `MerchantList` | `GET /acp/v1/merchants` |
+| `search_products` | Shopper describes a product | `ProductGrid` | `GET /acp/v1/products?merchantId=…` |
+| `get_product` | Shopper picks a result | `ProductDetailCard` | `GET /acp/v1/products/:id?merchantId=…` |
+| `create_handoff` | Flow B — "send me a link" | `CheckoutLinkCard` | `POST /acp/v1/handoff` |
+| `create_checkout` | Flow A — "buy in chat" | `OrderSummary` | `POST /acp/v1/checkouts` |
+| `complete_checkout` | Finalize Flow A | `OrderConfirmation` | `POST /acp/v1/checkouts/:id/complete` |
+| `get_order_status` | "Where's my order?" | `OrderStatusCard` | `GET /acp/v1/orders/:id` |
+
+Each response carries `_meta.uiHtml` (rendered HTML chunk for inline display) and `_meta.uiData` (structured payload for hosts that prefer to render their own UI from data).
 
 ## Auth model
 
-- **Discovery (browse/search):** unauthenticated, uses the App's per-environment ISV API key (the same kind of key the Custom GPT uses today). Read-only.
-- **Purchase (checkout, complete, order status):** OAuth via Nexus's `/oauth/authorize` flow. Same provider as the Custom GPT Option B — JWT-based now, Cognito Hosted UI when AWS migration completes.
+- **Discovery** (`list_merchants`, `search_products`, `get_product`): unauthenticated. Uses `NEXUS_FALLBACK_API_KEY` (the App's per-environment ISV key — same one the Custom GPT uses).
+- **Purchase** (`create_handoff`, `create_checkout`, `complete_checkout`): per-shopper JWT via OAuth. ChatGPT Apps platform forwards the JWT in `_meta.bearer_token` on tool calls; the server attaches it to outbound Nexus requests as `Authorization: Bearer <jwt>`. OAuth provider is Nexus's stub `/oauth/*` today, AWS Cognito Hosted UI when migration completes — same as the Custom GPT.
 
-The OpenAI Apps platform routes the JWT back to us via `_meta.bearer_token` on tool invocations. We extract it in the server and pass to handlers.
+## Per-merchant `checkoutMode`
 
-## Per-merchant checkout mode
+Nexus exposes `merchant.checkoutMode` on `list_merchants` responses. The App should pick the right tool:
 
-The merchant's `checkoutMode` (set by Agentix admin) determines which tool the agent picks for purchase:
-
-| `merchant.checkoutMode` | Agent picks | Result |
+| `merchant.checkoutMode` | App tool sequence | UX |
 |---|---|---|
-| `SIGNED_URL` | `create_handoff` | Link → our hosted shell at `agentixpay.ai/control-center/checkout/<id>` |
-| `MERCHANT_PAGE` | `create_handoff` | Link → merchant's own checkout (Shopify, WooCommerce) |
-| `IN_APP` | `create_checkout` + `complete_checkout` | Native payment sheet inline in ChatGPT (with stored card / Apple Pay / Shop Pay) |
-| `AUTO` | system-decides based on platform + flags | Same as above but Nexus picks |
+| `SIGNED_URL` | `create_handoff` | `CheckoutLinkCard` → click → opens Agentix-hosted checkout at `agentixpay.ai/pay/<id>` |
+| `MERCHANT_PAGE` | `create_handoff` | `CheckoutLinkCard` → click → opens merchant's own checkout (Shopify, etc.) |
+| `IN_APP` | `create_checkout` + `complete_checkout` | `OrderSummary` → `PaymentSheet` → `OrderConfirmation`, all inline |
+| `AUTO` | system-decides based on platform + flags | Same as above; Nexus picks |
 
-## Roadmap
+## Tests
 
-| Phase | Effort | Outcome |
-|---|---|---|
-| 1. Tools wired to live Nexus API (✅ this scaffold) | done | Logic works against `agentix-nexus.fly.dev` |
-| 2. UI components fully implemented (`ProductCard`, `OrderSummary`, `PaymentSheet`) | 1 week | Inline rich UI in chat |
-| 3. OpenAI Apps publisher registration + manifest finalization | 2-3 days | Listed as a Beta App |
-| 4. Apple Pay / Shop Pay integration via App SDK payment primitives | 1 week | One-tap checkout |
-| 5. Real-time updates via MCP resources (cart sync, order status pushes) | 1 week | Live updates |
-| 6. Submit for OpenAI App Store review | passive ~2 weeks | Public launch |
+```bash
+npm test
+```
 
-Total: ~5-6 focused weeks to public ChatGPT App.
+Currently 15 tests covering all UI renderers (XSS escaping, empty states, price formatting, demo/real mode banners, status pill colors, tracking links).
+
+## Deploy
+
+A `fly.toml` is included for hosting on Fly.io. The HTTP transport listens on `:4400` and serves:
+
+- `GET /manifest.json` — public App manifest (cached 5 min)
+- `GET /healthz` — health check (used by Fly load balancer)
+- `GET /mcp/sse` — MCP Server-Sent Events endpoint (ChatGPT Apps connect here)
+- `POST /mcp/messages?sessionId=…` — message channel for the SSE session
+
+```bash
+fly launch --copy-config --no-deploy --name agentix-nexus-app
+fly secrets set NEXUS_FALLBACK_API_KEY=nexus_xxx --app agentix-nexus-app
+fly deploy --app agentix-nexus-app
+```
+
+Once deployed at e.g. `https://agentix-nexus-app.fly.dev`, point the OpenAI Apps publisher manifest at:
+- App URL: `https://agentix-nexus-app.fly.dev`
+- MCP endpoint: `https://agentix-nexus-app.fly.dev/mcp/sse`
+- Manifest: `https://agentix-nexus-app.fly.dev/manifest.json`
+
+## What still needs the OpenAI side
+
+| Item | Status |
+|---|---|
+| MCP server + tools + UI renderers | ✅ Done |
+| stdio + SSE transports | ✅ Done |
+| Manifest + health endpoints | ✅ Done |
+| Tests | ✅ Done (15/15 passing) |
+| Local Claude Desktop sanity check | ✅ Works |
+| Fly hosting config | ✅ Done |
+| Apply for OpenAI Apps publisher access | ⏳ Pending OpenAI flow |
+| Submit manifest for review | ⏳ Pending |
+| Apple Pay / Shop Pay payment-sheet primitives | ⏳ Pending OpenAI Apps SDK docs |
+| Public launch | ⏳ ~2 weeks review after submission |
+
+## Layout
+
+```
+nexus-chatgpt-app/
+├── manifest.json              # ChatGPT App manifest (OAuth, MCP endpoint, UI components)
+├── Dockerfile                 # Multi-stage Node 20 alpine build
+├── fly.toml                   # Fly.io config — HTTP transport on :4400
+├── package.json               # express + @modelcontextprotocol/sdk + zod
+├── src/
+│   ├── server.ts              # MCP server entry — stdio + SSE/HTTP transports
+│   ├── client.ts              # HTTP client wrapping Nexus API calls
+│   ├── tools/                 # 7 tools — list_merchants, search_products, get_product,
+│   │                          # create_checkout, complete_checkout, create_handoff, get_order_status
+│   ├── components/
+│   │   ├── render.ts          # 8 inline UI HTML renderers
+│   │   └── README.md          # Component design specs
+│   └── auth/                  # JWT helpers (planned for Cognito migration)
+└── tests/
+    └── render.test.ts         # 15 renderer tests
+```
 
 ## License
 
