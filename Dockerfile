@@ -3,7 +3,6 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package.json package-lock.json* ./
-COPY ../nexus-sdk /workspace/nexus-sdk
 RUN npm ci
 COPY tsconfig.json ./
 COPY src ./src
