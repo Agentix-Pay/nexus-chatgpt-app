@@ -1,0 +1,27 @@
+{
+  "name": "@agentix/nexus-chatgpt-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agentix Nexus ChatGPT App — MCP-based agentic shopping App with inline UI for ChatGPT (and any MCP-compatible host)",
+  "type": "module",
+  "main": "./dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@agentix/nexus-sdk": "file:../nexus-sdk",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": { "node": ">=20" }
+}

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://chatgpt.com/schemas/app-manifest/v1",
+  "id": "agentix-nexus",
+  "name": "Nexus Shopping",
+  "shortName": "Nexus",
+  "description": "Shop across AI-enabled stores. Browse products, compare prices, complete checkout with your card on file or via secure link — all inside ChatGPT.",
+  "iconUrl": "https://agentix-nexus.fly.dev/static/icon-512.png",
+  "categories": ["shopping", "commerce", "lifestyle"],
+  "publisher": {
+    "name": "Agentix",
+    "url": "https://agentixpay.ai",
+    "supportEmail": "support@agentixpay.ai",
+    "privacyPolicyUrl": "https://agentix-nexus.fly.dev/privacy"
+  },
+  "auth": {
+    "type": "oauth2",
+    "authorizationUrl": "https://agentix-nexus.fly.dev/oauth/authorize",
+    "tokenUrl": "https://agentix-nexus.fly.dev/oauth/token",
+    "scopes": ["openid", "email", "profile", "shopping.read", "shopping.checkout"]
+  },
+  "mcp": {
+    "endpoint": "/mcp",
+    "transport": "stdio | sse",
+    "version": "2025-03-26"
+  },
+  "capabilities": {
+    "tools": true,
+    "resources": false,
+    "prompts": true,
+    "ui": {
+      "components": ["ProductCard", "OrderSummary", "PaymentSheet"],
+      "paymentSheet": {
+        "providers": ["stripe", "applePay", "shopPay"]
+      }
+    }
+  },
+  "_notes": [
+    "This manifest is illustrative — OpenAI's Apps platform is evolving; consult their current schema before publishing.",
+    "MCP version pinned to 2025-03-26 — bump as the protocol evolves.",
+    "Authorization URLs swap to Cognito's Hosted UI when AWS migration completes."
+  ]
+}
