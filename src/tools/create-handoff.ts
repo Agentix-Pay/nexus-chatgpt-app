@@ -21,6 +21,7 @@ export const createHandoffTool = {
     "Generate a secure checkout link the shopper opens in their browser (Flow B). Use this when the merchant.checkoutMode is SIGNED_URL or MERCHANT_PAGE, or when the shopper asks for a link. The response.checkoutHost field tells you whether the link points to our hosted shell or the merchant's own checkout (Shopify, etc.) — surface that in the UI so the shopper knows what they're clicking.",
   inputSchema,
   outputUI: 'CheckoutLinkCard',
+  annotations: { title: 'Get checkout link', readOnlyHint: false, openWorldHint: false, destructiveHint: false },
   handler: async (
     input: z.infer<typeof inputSchema>,
     ctx: { jwt?: string; fallbackApiKey?: string },

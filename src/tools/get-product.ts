@@ -11,6 +11,7 @@ export const getProductTool = {
   description: 'Fetch full details for a single product (use after search_products to render a product detail card).',
   inputSchema,
   outputUI: 'ProductDetailCard',
+  annotations: { title: 'Get product details', readOnlyHint: true, openWorldHint: false, destructiveHint: false },
   handler: async (
     input: z.infer<typeof inputSchema>,
     ctx: { jwt?: string; fallbackApiKey?: string },

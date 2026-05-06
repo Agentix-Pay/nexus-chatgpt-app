@@ -13,6 +13,7 @@ export const completeCheckoutTool = {
     'Finalize an in-chat checkout (Flow A). With OAuth + Stripe via the SDK bridge, this charges the user\'s saved payment method through the merchant\'s gateway. The response includes a payment.summary string ("Charged $X to Visa ending 4242") — render that in the OrderConfirmation UI.',
   inputSchema,
   outputUI: 'OrderConfirmation',
+  annotations: { title: 'Complete in-chat checkout', readOnlyHint: false, openWorldHint: false, destructiveHint: false },
   handler: async (
     input: z.infer<typeof inputSchema>,
     ctx: { jwt?: string; fallbackApiKey?: string },

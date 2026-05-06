@@ -14,6 +14,7 @@ export const listMerchantsTool = {
   description: 'List all stores available to the shopper. Use at the start of a session or when the shopper asks "what stores are available?".',
   inputSchema: z.object({}),
   outputUI: 'MerchantList',
+  annotations: { title: 'List stores', readOnlyHint: true, openWorldHint: false, destructiveHint: false },
   handler: async (
     _input: Record<string, never>,
     ctx: { jwt?: string; fallbackApiKey?: string },

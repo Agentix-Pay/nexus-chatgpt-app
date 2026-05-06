@@ -21,6 +21,7 @@ export const createCheckoutTool = {
     'Start an in-chat checkout (Walmart-style — Flow A). Use when the merchant.checkoutMode is IN_APP, or when the shopper explicitly asks to complete in chat. Pair with complete_checkout. For browser-handoff, use create_handoff instead.',
   inputSchema,
   outputUI: 'OrderSummary',
+  annotations: { title: 'Start in-chat checkout', readOnlyHint: false, openWorldHint: false, destructiveHint: false },
   handler: async (
     input: z.infer<typeof inputSchema>,
     ctx: { jwt?: string; fallbackApiKey?: string },

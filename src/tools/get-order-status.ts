@@ -8,6 +8,7 @@ export const getOrderStatusTool = {
   description: 'Look up the status of a previously placed order. Use when the shopper asks "where\'s my order?" or "did my order ship?".',
   inputSchema,
   outputUI: 'OrderStatusCard',
+  annotations: { title: 'Order status', readOnlyHint: true, openWorldHint: false, destructiveHint: false },
   handler: async (
     input: z.infer<typeof inputSchema>,
     ctx: { jwt?: string; fallbackApiKey?: string },

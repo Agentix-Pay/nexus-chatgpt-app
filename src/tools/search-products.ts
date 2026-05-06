@@ -27,6 +27,7 @@ export const searchProductsTool = {
   description: 'Search products in a specific store. Always pass a merchantId from list_merchants.',
   inputSchema,
   outputUI: 'ProductGrid',
+  annotations: { title: 'Search products', readOnlyHint: true, openWorldHint: false, destructiveHint: false },
   handler: async (
     input: z.infer<typeof inputSchema>,
     ctx: { jwt?: string; fallbackApiKey?: string },

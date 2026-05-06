@@ -18,8 +18,11 @@ import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
   type CallToolRequest,
 } from '@modelcontextprotocol/sdk/types.js';
+import { WIDGET_NAMES, widgetUri, widgetHtml, widgetMeta, type WidgetName } from './widgets/index.js';
 import express from 'express';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
@@ -123,7 +126,7 @@ function renderUI(outputUI: string, result: unknown): string | null {
 function buildServer(): Server {
   const server = new Server(
     { name: 'agentix-nexus', version: '0.1.0' },
-    { capabilities: { tools: {}, prompts: {} } },
+    { capabilities: { tools: {}, resources: {}, prompts: {} } },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -131,8 +134,45 @@ function buildServer(): Server {
       name: t.name,
       description: t.description,
       inputSchema: zodToJsonSchema(t.inputSchema),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      annotations: (t as any).annotations,
+      _meta: { ui: { resourceUri: widgetUri(t.outputUI) } },
     })),
   }));
+
+  // ── Resources: serve the iframe widget HTML pages ─────────────────────
+  // Per OpenAI Apps SDK: each tool's `_meta.ui.resourceUri` points at one of
+  // these. ChatGPT loads the resource into an iframe inline in chat, then
+  // posts the tool's structuredContent to the iframe via postMessage.
+  const RESOURCE_MIME = 'text/html;profile=mcp-app';
+
+  server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+    resources: WIDGET_NAMES.map((name) => ({
+      uri: `ui://widget/${name}.html`,
+      name: `nexus-widget-${name}`,
+      mimeType: RESOURCE_MIME,
+      _meta: widgetMeta(),
+    })),
+  }));
+
+  server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
+    const uri = req.params.uri;
+    const m = uri.match(/^ui:\/\/widget\/([a-z-]+)\.html$/);
+    const name = m?.[1];
+    if (!name || !(WIDGET_NAMES as readonly string[]).includes(name)) {
+      throw new Error(`Unknown widget URI: ${uri}`);
+    }
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: RESOURCE_MIME,
+          text: widgetHtml(name as WidgetName),
+          _meta: widgetMeta(),
+        },
+      ],
+    };
+  });
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const tool = tools.find((t) => t.name === req.params.name);
@@ -147,13 +187,16 @@ function buildServer(): Server {
       const parsed = tool.inputSchema.parse(req.params.arguments ?? {});
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tool.handler as (i: any, c: SessionContext) => Promise<unknown>)(parsed, ctx);
+      // structuredContent is the spec field ChatGPT posts to the iframe widget
+      // via ui/notifications/tool-result. uiHtml stays as a fallback for
+      // non-iframe MCP hosts (e.g. Claude Desktop with rich messages).
       const uiHtml = renderUI(tool.outputUI, result);
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        structuredContent: result as Record<string, unknown>,
         _meta: {
-          uiComponent: tool.outputUI,
+          ui: { resourceUri: widgetUri(tool.outputUI) },
           uiHtml: uiHtml ?? undefined,
-          uiData: result,
         },
       };
     } catch (err) {
@@ -179,6 +222,41 @@ async function startStdio() {
 
 async function startHttp(port: number) {
   const app = express();
+
+  // ── Root landing page (so visitors don't 404) ──
+  app.get('/', (_req, res) => {
+    res
+      .setHeader('Content-Type', 'text/html; charset=utf-8')
+      .send(`<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><title>Nexus — ChatGPT App</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#F8FAFC;color:#0F172A;margin:0;padding:48px 16px;min-height:100vh;box-sizing:border-box}
+.card{max-width:640px;margin:0 auto;background:#fff;border-radius:16px;padding:36px;box-shadow:0 1px 3px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.04)}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:20px;font-weight:600;font-size:14px;color:#0F172A}
+.brand-dot{width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,#67E8F9,#818CF8 50%,#C084FC)}
+h1{font-size:24px;margin:0 0 8px}
+.muted{color:#64748B;font-size:14px;line-height:1.6}
+.endpoints{margin:24px 0 0;padding:0;list-style:none}
+.endpoints li{padding:10px 14px;background:#F1F5F9;border-radius:8px;margin-bottom:6px;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+.endpoints code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#0F172A}
+.tag{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:#D1FAE5;color:#065F46}
+a{color:#1D4ED8;text-decoration:none}
+a:hover{text-decoration:underline}
+</style></head><body>
+<div class="card">
+  <div class="brand"><span class="brand-dot"></span>Agentix · Nexus ChatGPT App</div>
+  <h1>MCP Server is running</h1>
+  <p class="muted">This is the backend for the Nexus ChatGPT App — an MCP server that powers an inline shopping experience inside ChatGPT (and any MCP-compatible host: Claude Desktop, future agents). It's not meant to be visited directly.</p>
+  <ul class="endpoints">
+    <li><code>GET /healthz</code> <span class="tag">200 OK</span></li>
+    <li><code>GET /manifest.json</code> <span class="tag">App manifest</span></li>
+    <li><code>GET /mcp/sse</code> <span class="tag">MCP SSE</span></li>
+    <li><code>POST /mcp/messages?sessionId=…</code> <span class="tag">MCP messages</span></li>
+  </ul>
+  <p class="muted" style="margin-top:24px;font-size:13px">Source: <a href="https://github.com/Agentix-Pay/nexus-chatgpt-app">github.com/Agentix-Pay/nexus-chatgpt-app</a></p>
+</div></body></html>`);
+  });
 
   // ── Public manifest + health (no MCP auth needed) ──
   app.get('/manifest.json', (_req, res) => {
