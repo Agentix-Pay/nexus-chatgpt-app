@@ -24,7 +24,7 @@ export interface Product {
 
 export const searchProductsTool = {
   name: 'search_products',
-  description: 'Search products in a specific store. Always pass a merchantId from list_merchants.',
+  description: 'Search or list products in a specific store. ALWAYS use this (not list_merchants) when the shopper wants to see products — for prompts like "show me products", "find toys", "browse Building Sets", "what\'s under $50". Pass merchantId from list_merchants. Optional: q (free-text search), category (exact category name), minPriceCents, maxPriceCents.',
   inputSchema,
   outputUI: 'ProductGrid',
   annotations: { title: 'Search products', readOnlyHint: true, openWorldHint: false, destructiveHint: false },
@@ -48,6 +48,11 @@ export const searchProductsTool = {
     if (!result.ok) {
       return { error: { code: result.code, message: result.message } };
     }
-    return { products: result.data.data };
+    return {
+      merchantId: input.merchantId,
+      products: result.data.data,
+      ...(input.category ? { category: input.category } : {}),
+      ...(input.q ? { q: input.q } : {}),
+    };
   },
 };

@@ -281,6 +281,21 @@ a:hover{text-decoration:underline}
     });
   });
 
+  // ── OAuth discovery: DISABLED for anonymous-by-default mode ───────────
+  // The App used to advertise OAuth via these well-known endpoints, prompting
+  // ChatGPT to show a sign-in screen at install time. We now serve 404 here
+  // so ChatGPT treats the App as no-auth-required. Shoppers can browse,
+  // search, and use signed-link checkout without any account.
+  //
+  // Per-tool auth (e.g. for IN_APP card-on-file checkout) will be wired
+  // selectively at the tool level if/when needed — not via App-wide OAuth.
+  app.get('/.well-known/oauth-authorization-server', (_req, res) => {
+    res.status(404).json({ error: 'OAuth not required for this App' });
+  });
+  app.get('/.well-known/oauth-protected-resource', (_req, res) => {
+    res.status(404).json({ error: 'OAuth not required for this App' });
+  });
+
   // ── MCP over SSE ──────────────────────────────────────────
   // Map of session-id → transport so multiple concurrent MCP clients work.
   const transports = new Map<string, SSEServerTransport>();

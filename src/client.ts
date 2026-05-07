@@ -13,6 +13,13 @@
 
 const BASE_URL = process.env['NEXUS_BASE_URL'] ?? 'https://agentix-nexus.fly.dev';
 
+// Hard-coded agent attribution. Every outbound call from this MCP App originates
+// from a shopper using ChatGPT (that's the host that connects to us). When a
+// new App is built for Gemini / Claude / etc., it'll have its own client.ts
+// with its own AGENT_ID — the dashboard's "Source" column uses this to show
+// which LLM each order came through.
+const AGENT_ID = process.env['NEXUS_AGENT_ID'] ?? 'chatgpt';
+
 export interface ApiCallOptions {
   /** User JWT from the OAuth session — preferred when present. */
   jwt?: string;
@@ -43,6 +50,16 @@ async function call<T>(
   const timeoutMs = opts.timeoutMs ?? 15_000;
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+  // Auto-attach agentId on POST bodies so Nexus can persist which LLM the
+  // order came from. Doesn't override if the caller already passed agentId.
+  let finalBody = body;
+  if (method === 'POST' && body && typeof body === 'object' && !Array.isArray(body)) {
+    const b = body as Record<string, unknown>;
+    if (b['agentId'] === undefined) {
+      finalBody = { ...b, agentId: AGENT_ID };
+    }
+  }
+
   try {
     const res = await fetch(`${BASE_URL}${path}`, {
       method,
@@ -51,7 +68,7 @@ async function call<T>(
         'Content-Type': 'application/json',
         ...(opts.headers ?? {}),
       },
-      body: body ? JSON.stringify(body) : undefined,
+      body: finalBody ? JSON.stringify(finalBody) : undefined,
       signal: controller.signal,
     });
     const json = (await res.json().catch(() => ({}))) as { success?: boolean; data?: T; error?: { code?: string; message?: string } };

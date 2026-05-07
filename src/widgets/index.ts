@@ -20,6 +20,7 @@ const WIDGET_DOMAIN = 'https://agentix-nexus-app.fly.dev';
 
 export const WIDGET_NAMES = [
   'merchant-list',
+  'category-grid',
   'product-grid',
   'product-detail',
   'order-summary',
@@ -33,9 +34,14 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
 
 /** Map a tool's outputUI value to its widget URI. */
 export function widgetUri(outputUI: string): string {
+  // Three browsing tools (list_merchants, list_categories, search_products) all
+  // render through the same widget so navigation between merchants → categories
+  // → products happens in-place. The widget detects which data shape arrived
+  // and renders the right view.
   const map: Record<string, WidgetName> = {
     MerchantList: 'merchant-list',
-    ProductGrid: 'product-grid',
+    CategoryGrid: 'merchant-list',   // ← shares the merchant-list widget
+    ProductGrid: 'merchant-list',    // ← shares the merchant-list widget
     ProductDetailCard: 'product-detail',
     OrderSummary: 'order-summary',
     PaymentSheet: 'payment-sheet',
@@ -63,8 +69,9 @@ export function widgetMeta(): Record<string, unknown> {
 const SHARED_CSS = `
 :root{color-scheme:light;}
 *{box-sizing:border-box;}
-body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;background:transparent;color:#0F172A;font-size:14px;line-height:1.5;font-feature-settings:"ss01","cv11";font-variant-numeric:tabular-nums;}
-.nx-card{background:#fff;border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.04);max-width:560px;margin:0 auto;}
+html,body{margin:0;padding:0;background:#fff;}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;color:#0F172A;font-size:14px;line-height:1.5;font-feature-settings:"ss01","cv11";font-variant-numeric:tabular-nums;}
+.nx-card{background:#fff;padding:20px;max-width:none;margin:0;border-radius:0;box-shadow:none;}
 .nx-eyebrow{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:#475569;margin:0 0 6px;}
 .nx-title{font-size:18px;font-weight:600;margin:0 0 10px;}
 .nx-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #E2E8F0;}
@@ -83,7 +90,39 @@ body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Tex
 .nx-pill-success{background:#D1FAE5;color:#065F46;}
 .nx-pill-warn{background:#FEF3C7;color:#713F12;}
 .nx-banner{margin-top:12px;padding:10px 12px;border-radius:8px;background:#FEF3C7;border:1px solid #FDE68A;color:#713F12;font-size:12px;}
-.nx-tile{display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:10px;border:1px solid #E2E8F0;background:#fff;margin-bottom:8px;}
+.nx-tile{display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:10px;border:1px solid #E2E8F0;background:#fff;margin-bottom:8px;transition:border-color .15s,box-shadow .15s,transform .1s;}
+.nx-cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:6px;}
+.nx-cat{position:relative;overflow:hidden;border-radius:12px;border:1px solid #E2E8F0;background:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;transition:transform .12s,box-shadow .15s,border-color .15s;aspect-ratio:1;}
+.nx-cat *{pointer-events:none;}
+.nx-cat-img{position:absolute;inset:0;background-size:cover;background-position:center;transition:transform .4s;}
+.nx-cat-overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(2,6,23,0) 30%,rgba(2,6,23,.78) 100%);}
+.nx-cat-text{position:absolute;left:10px;right:10px;bottom:10px;color:#fff;}
+.nx-cat-name{font-size:14px;font-weight:600;line-height:1.2;margin:0 0 2px;text-shadow:0 1px 2px rgba(0,0,0,.2);}
+.nx-cat-count{font-size:11px;font-weight:500;opacity:.85;}
+.nx-cat:hover{border-color:#818CF8;box-shadow:0 1px 2px rgba(15,23,42,.06),0 8px 22px rgba(129,140,248,.18);}
+.nx-cat:hover .nx-cat-img{transform:scale(1.04);}
+.nx-cat:active{transform:scale(.98);}
+.nx-cat:focus-visible{outline:none;border-color:#818CF8;box-shadow:0 0 0 3px rgba(129,140,248,.30);}
+.nx-prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:8px;}
+.nx-prod{position:relative;overflow:hidden;border-radius:10px;border:1px solid #E2E8F0;background:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;transition:border-color .15s,box-shadow .15s,transform .1s;display:flex;flex-direction:column;}
+.nx-prod *{pointer-events:none;}
+.nx-prod-img{aspect-ratio:1;background:linear-gradient(135deg,#E0F2FE,#EDE9FE);background-size:cover;background-position:center;}
+.nx-prod-body{padding:10px 12px 12px;display:flex;flex-direction:column;gap:2px;}
+.nx-prod-title{font-size:13px;font-weight:600;color:#0F172A;line-height:1.3;margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.nx-prod-price{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600;color:#0F172A;margin-top:4px;}
+.nx-prod-stock{font-size:10px;font-weight:500;color:#059669;margin-top:2px;}
+.nx-prod-stock-out{color:#B91C1C;}
+.nx-prod:hover{border-color:#818CF8;box-shadow:0 1px 2px rgba(15,23,42,.06),0 6px 16px rgba(129,140,248,.14);}
+.nx-prod:active{transform:scale(.99);}
+.nx-prod:focus-visible{outline:none;border-color:#818CF8;box-shadow:0 0 0 3px rgba(129,140,248,.30);}
+.nx-breadcrumb{display:flex;align-items:center;gap:6px;font-size:12px;color:#64748B;margin-bottom:8px;}
+.nx-breadcrumb-link{color:#818CF8;cursor:pointer;font-weight:500;text-decoration:none;}
+.nx-breadcrumb-link:hover{color:#6366F1;}
+.nx-tile-clickable{cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;}
+.nx-tile-clickable *{pointer-events:none;}
+.nx-tile-clickable:hover{border-color:#818CF8;box-shadow:0 1px 2px rgba(15,23,42,.06),0 6px 18px rgba(129,140,248,.10);}
+.nx-tile-clickable:active{transform:scale(.995);}
+.nx-tile-clickable:focus-visible{outline:none;border-color:#818CF8;box-shadow:0 0 0 3px rgba(129,140,248,.30);}
 .nx-tile-img{width:56px;height:56px;border-radius:8px;background:linear-gradient(135deg,#E0F2FE,#EDE9FE);flex-shrink:0;background-size:cover;background-position:center;}
 .nx-tile-body{flex:1;min-width:0;}
 .nx-tile-title{font-weight:600;color:#0F172A;font-size:14px;margin:0;}
@@ -94,21 +133,195 @@ body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Tex
 .nx-error{padding:12px;border-radius:8px;background:#FEE2E2;border:1px solid #FECACA;color:#991B1B;font-size:13px;}
 .nx-payment-options{margin:8px 0 14px;display:flex;flex-direction:column;gap:6px;}
 .nx-payment-option{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-radius:8px;border:1px solid #E2E8F0;background:#fff;}
+.nx-actions{display:flex;flex-direction:column;gap:8px;}
+.nx-btn{display:flex;align-items:center;justify-content:space-between;width:100%;padding:13px 16px;border-radius:10px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;border:0;transition:transform .1s,box-shadow .15s,filter .15s;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;}
+.nx-btn *{pointer-events:none;}
+.nx-btn-meta{font-size:11px;font-weight:500;opacity:.7;letter-spacing:.2px;}
+.nx-btn-primary{background:linear-gradient(135deg,#67E8F9,#818CF8 50%,#C084FC);color:#0B0F2A;box-shadow:0 1px 2px rgba(15,23,42,.10),0 8px 22px rgba(129,140,248,.25);}
+.nx-btn-primary:hover{filter:brightness(1.04);box-shadow:0 1px 2px rgba(15,23,42,.10),0 12px 30px rgba(129,140,248,.32);}
+.nx-btn-primary:active{transform:scale(.99);}
+.nx-btn-secondary{background:#fff;color:#0F172A;border:1px solid #E2E8F0;}
+.nx-btn-secondary:hover{border-color:#818CF8;background:#F8FAFC;}
+.nx-btn-secondary:active{transform:scale(.99);}
+.nx-btn:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(129,140,248,.30);}
+.nx-btn-chatgpt-pay{background:#000;color:#fff;}
+.nx-btn-chatgpt-pay:hover{background:#1A1A1A;box-shadow:0 1px 2px rgba(0,0,0,.2),0 8px 22px rgba(0,0,0,.18);}
+.nx-pay-toast{margin-bottom:10px;padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.5;}
+.nx-pay-toast-ok{background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46;}
+.nx-pay-toast-err{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E;}
 `;
 
-/** Common boilerplate that listens for postMessage and dispatches to render(). */
+/**
+ * Boilerplate that wires the iframe to the host's data feed.
+ *
+ * OpenAI Apps SDK injects a `window.openai` global with `toolOutput` set from
+ * page load and fires an `openai:set_globals` event whenever it changes. We
+ * read that synchronously, retry on tick(s) for race conditions, and ALSO
+ * listen for raw postMessage as a fallback for non-OpenAI MCP hosts (Claude
+ * Desktop, MCP Inspector). On the first 1.5s with no data, we show debug info
+ * so we can diagnose live.
+ */
 const POSTMSG_LISTENER = `
 const root = document.getElementById('root');
+let __rendered = false;
+let __lastData = null;
 function fmt(c){if(c==null)return '$—';return '$'+(Number(c)/100).toFixed(2);}
 function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+// Call another tool from inside the widget. Tries every plausible API surface
+// the host might expose. Falls through to a follow-up prompt, then postMessage,
+// then a visible debug overlay if everything failed.
+// Strategy: sendFollowUpMessage creates a new turn (which is what we want for
+// navigation between widget types). Per host limitation, the prompt routes
+// through the agent — so prompts must be UNAMBIGUOUS, naming the exact tool.
+function callTool(name,args,fallbackPrompt){
+  const o=window.openai;
+  if(!o)return;
+  if(typeof o.sendFollowUpMessage==='function'&&fallbackPrompt){
+    try{o.sendFollowUpMessage({prompt:fallbackPrompt});return;}catch(e){}
+  }
+  // Only fall through to callTool if we have a tool name and no follow-up worked
+  if(name&&typeof o.callTool==='function'){
+    try{o.callTool(name,args||{});}catch(e){}
+  }
+}
+// (API inspector removed — debug surfaced what we needed, see git history.)
+function __showCallDebug(info){/* dev-only no-op now that clicks work */void info;}
+window.callTool=callTool; // expose for any inline handlers
+// Delegated click/key handler. Tiles set data-call-tool, data-args (JSON), and
+// data-prompt. We listen once on the root and route to callTool. This avoids
+// inline onclick attributes that some iframe sandboxes/CSPs filter out.
+function __onActivate(e){
+  // Native ChatGPT-Pay button — call window.openai.requestCheckout directly
+  const payBtn=e.target&&e.target.closest&&e.target.closest('[data-action="chatgpt-pay"]');
+  if(payBtn){
+    e.preventDefault();
+    payBtn.style.opacity='0.6';
+    setTimeout(()=>{payBtn.style.opacity='';},250);
+    __chatgptPay();
+    return;
+  }
+  const t=e.target&&e.target.closest&&e.target.closest('[data-call-tool],[data-prompt-only]');
+  if(!t)return;
+  e.preventDefault();
+  const tool=t.getAttribute('data-call-tool');
+  const promptText=t.getAttribute('data-prompt')||'';
+  let args={};
+  try{args=JSON.parse(t.getAttribute('data-args')||'{}');}catch(err){}
+  callTool(tool||null,args,promptText);
+  // Visual feedback so user knows click registered
+  t.style.opacity='0.6';
+  setTimeout(()=>{t.style.opacity='';},250);
+}
+// Trigger OpenAI's native checkout sheet. Prototype — gracefully shows what
+// happened (sheet opened / not enabled / errored) so we know whether
+// Instant Checkout is enabled for this App in dev mode.
+function __chatgptPay(){
+  const ctx=window.__nx_pay_ctx;
+  if(!ctx){__payToast('err','No item context available');return;}
+  const o=window.openai;
+  if(!o||typeof o.requestCheckout!=='function'){
+    __payToast('err','requestCheckout is not available on this host (try a newer ChatGPT build).');
+    return;
+  }
+  // Build the checkout request. Schema is OpenAI-defined; we send a generous
+  // shape and they'll ignore unknown fields. Adjust once docs are confirmed.
+  const payload={
+    merchant:{id:ctx.merchantId,name:ctx.merchantName},
+    items:[{
+      id:ctx.productId,
+      sku:ctx.sku,
+      name:ctx.productTitle,
+      quantity:1,
+      unitPriceCents:ctx.priceCents,
+      currency:ctx.currency||'USD',
+    }],
+    totalCents:ctx.priceCents,
+    currency:ctx.currency||'USD',
+    captureMethod:'automatic',
+  };
+  __payToast('info','Opening ChatGPT pay sheet…');
+  try{
+    const r=o.requestCheckout(payload);
+    if(r&&typeof r.then==='function'){
+      r.then((result)=>{
+        __payToast('ok','Payment confirmed — token: '+(result&&(result.paymentToken||result.token||result.id)||'(no token returned)'));
+      }).catch((err)=>{
+        const m=String(err&&err.message||err);
+        __payToast('err','Pay sheet error: '+m);
+      });
+    }else{
+      __payToast('ok','requestCheckout invoked (sync return — '+JSON.stringify(r)+')');
+    }
+  }catch(err){
+    __payToast('err','requestCheckout threw: '+String(err&&err.message||err));
+  }
+}
+function __payToast(kind,msg){
+  let host=document.querySelector('.nx-actions');
+  if(!host){host=document.body;}
+  let el=document.getElementById('__nx_pay_toast');
+  if(!el){
+    el=document.createElement('div');
+    el.id='__nx_pay_toast';
+    el.className='nx-pay-toast';
+    host.parentNode.insertBefore(el,host);
+  }
+  el.className='nx-pay-toast '+(kind==='ok'?'nx-pay-toast-ok':kind==='err'?'nx-pay-toast-err':'nx-pay-toast-ok');
+  el.textContent=msg;
+}
+document.addEventListener('click',__onActivate,true);
+document.addEventListener('keydown',function(e){
+  if(e.key!=='Enter'&&e.key!==' ')return;
+  const t=e.target;
+  if(!t||!t.closest||!t.closest('[data-call-tool],[data-prompt-only]'))return;
+  __onActivate(e);
+},true);
+function safeRender(data){
+  if(!data||(typeof data==='object'&&Object.keys(data).length===0))return false;
+  try{render(data);__rendered=true;return true;}
+  catch(err){root.innerHTML='<div class="nx-card"><div class="nx-error">Render error: '+escapeHtml(err.message)+'</div></div>';return true;}
+}
+function readOpenAI(){
+  try{
+    const o=window.openai;
+    if(!o)return false;
+    const d=o.toolOutput||o.tool_output||o.structuredContent||(o.toolResponse&&o.toolResponse.structuredContent)||null;
+    return d?safeRender(d):false;
+  }catch(e){return false;}
+}
+// Synchronous attempt + retries for race conditions
+readOpenAI();
+[0,50,200,500,1000].forEach(ms=>setTimeout(()=>{if(!__rendered)readOpenAI();},ms));
+// OpenAI Apps SDK event for live updates
+window.addEventListener('openai:set_globals',()=>readOpenAI(),{passive:true});
+window.addEventListener('openai:tool_response',(e)=>{const d=(e&&e.detail)||{};safeRender(d.structuredContent||d.toolOutput||d);},{passive:true});
+// Fallback: raw postMessage protocol for non-OpenAI hosts
 window.addEventListener('message',(e)=>{
-  if(e.source!==window.parent)return;
-  const m=e.data;if(!m||m.jsonrpc!=='2.0')return;
-  if(m.method!=='ui/notifications/tool-result')return;
-  const data=(m.params&&(m.params.structuredContent||m.params.data||m.params))||{};
-  try{render(data);}catch(err){root.innerHTML='<div class="nx-card"><div class="nx-error">Render error: '+escapeHtml(err.message)+'</div></div>';}
+  const m=e.data;if(!m||typeof m!=='object')return;
+  // Match a range of plausible message shapes
+  let payload=null;
+  if(m.jsonrpc==='2.0'&&m.method&&/tool[_-]?(result|response|output)/i.test(m.method)){
+    payload=(m.params&&(m.params.structuredContent||m.params.toolOutput||m.params.data||m.params))||null;
+  } else if(m.type&&/tool[_-]?(result|response|output)|set[_-]?globals/i.test(m.type)){
+    payload=m.payload||m.data||m.toolOutput||m.structuredContent||null;
+  } else if(m.toolOutput||m.structuredContent){
+    payload=m.toolOutput||m.structuredContent;
+  }
+  if(payload)safeRender(payload);
 },{passive:true});
-window.parent.postMessage({jsonrpc:'2.0',method:'ui/ready'},'*');
+// Signal ready (harmless if ignored)
+try{window.parent&&window.parent.postMessage({jsonrpc:'2.0',method:'ui/ready'},'*');}catch(e){}
+// Debug: if nothing arrived in 1.5s, dump what we can see so the screenshot reveals the protocol
+setTimeout(()=>{
+  if(__rendered)return;
+  const dbg={
+    hasWindowOpenAI: !!window.openai,
+    openaiKeys: window.openai?Object.keys(window.openai):[],
+    toolOutputType: window.openai&&typeof window.openai.toolOutput,
+    href: location.href,
+  };
+  root.innerHTML='<div class="nx-card"><p class="nx-eyebrow">Widget debug</p><pre style="margin:0;font-size:11px;font-family:ui-monospace,monospace;color:#475569;white-space:pre-wrap;">'+escapeHtml(JSON.stringify(dbg,null,2))+'</pre></div>';
+},1500);
 `;
 
 interface WidgetSpec {
@@ -117,24 +330,185 @@ interface WidgetSpec {
 }
 
 const WIDGETS: Record<WidgetName, WidgetSpec> = {
-  // ── MerchantList ──────────────────────────────────────────────────────
+  // ── MerchantList (multi-state: merchants / categories / products) ──────
+  // The same widget instance can show 3 different shopping views by detecting
+  // the shape of the data passed in. This sidesteps the OpenAI Apps SDK
+  // limitation where openai.callTool sometimes silently no-ops, and avoids
+  // routing through the agent (which often misroutes requests). All buttons
+  // here use sendFollowUpMessage with HIGHLY explicit prompts that include the
+  // tool name and exact args.
   'merchant-list': {
-    emptyHtml: `<div class="nx-card"><div class="nx-empty">Loading stores…</div></div>`,
+    emptyHtml: `<div class="nx-card"><div class="nx-empty">Loading…</div></div>`,
     renderJs: `
-      const merchants = data.merchants || [];
-      if (!merchants.length) {
-        root.innerHTML = '<div class="nx-card"><div class="nx-empty">No stores available right now.</div></div>';
+      // Multi-state widget — detects which shopping view to render
+      // ── Products view (highest priority) ─────────────────────────────
+      if (Array.isArray(data.products) && data.products.length >= 0 && data.merchantId) {
+        renderProducts(data);
         return;
       }
-      const tiles = merchants.map(m => \`
-        <div class="nx-tile">
-          <div class="nx-tile-img"></div>
-          <div class="nx-tile-body">
-            <p class="nx-tile-title">\${escapeHtml(m.displayName)}</p>
-            <p class="nx-tile-meta">\${escapeHtml(m.domain || '')}\${m.platform ? ' · <span class="nx-pill">' + escapeHtml(m.platform) + '</span>' : ''}</p>
-          </div>
-        </div>\`).join('');
-      root.innerHTML = '<div class="nx-card"><p class="nx-eyebrow">Available stores</p><h3 class="nx-title">' + merchants.length + ' ' + (merchants.length===1?'store':'stores') + '</h3>' + tiles + '</div>';
+      // ── Categories view ──────────────────────────────────────────────
+      if (Array.isArray(data.categories) && data.categories.length >= 0 && data.merchantId) {
+        renderCategories(data);
+        return;
+      }
+      // ── Merchant list (default) ──────────────────────────────────────
+      renderMerchants(data);
+      return;
+
+      function renderMerchants(data) {
+        const merchants = data.merchants || [];
+        if (!merchants.length) {
+          root.innerHTML = '<div class="nx-card"><div class="nx-empty">No stores available right now.</div></div>';
+          return;
+        }
+        const tiles = merchants.map(m => {
+          const id = m.id || '';
+          const name = m.displayName || '';
+          const args = JSON.stringify({merchantId:id}).replace(/"/g,'&quot;');
+          const prompt = escapeHtml('Use the list_categories tool to show me product categories at ' + name + ' (merchantId: ' + id + ')');
+          return \`
+            <div class="nx-tile nx-tile-clickable" role="button" tabindex="0"
+                 data-call-tool="list_categories"
+                 data-args="\${args}"
+                 data-prompt="\${prompt}">
+              <div class="nx-tile-img"></div>
+              <div class="nx-tile-body">
+                <p class="nx-tile-title">\${escapeHtml(name)}</p>
+                <p class="nx-tile-meta">\${escapeHtml(m.domain || '')}\${m.platform ? ' · <span class="nx-pill">' + escapeHtml(m.platform) + '</span>' : ''}</p>
+              </div>
+              <div class="nx-tile-meta" style="align-self:center;color:#818CF8;font-weight:500;">Browse →</div>
+            </div>\`;
+        }).join('');
+        root.innerHTML = '<div class="nx-card"><p class="nx-eyebrow">Available stores</p><h3 class="nx-title">' + merchants.length + ' ' + (merchants.length===1?'store':'stores') + '</h3>' + tiles + '</div>';
+      }
+
+      function renderCategories(data) {
+        const cats = data.categories || [];
+        const merchantId = data.merchantId || '';
+        if (!cats.length) {
+          root.innerHTML = '<div class="nx-card"><div class="nx-empty">No categories available.</div></div>';
+          return;
+        }
+        const tiles = cats.map(c => {
+          const safeName = escapeHtml(c.name || '');
+          const argsObj = {merchantId, category: c.name, limit: 24};
+          const args = JSON.stringify(argsObj).replace(/"/g,'&quot;');
+          const prompt = escapeHtml('Use search_products with merchantId=' + merchantId + ' and category="' + (c.name || '') + '" and limit=24 to list products');
+          const bg = c.sampleImage ? "background-image:url('" + c.sampleImage + "');" : '';
+          return \`
+            <div class="nx-cat" role="button" tabindex="0"
+                 data-call-tool="search_products"
+                 data-args="\${args}"
+                 data-prompt="\${prompt}">
+              <div class="nx-cat-img" style="\${bg}"></div>
+              <div class="nx-cat-overlay"></div>
+              <div class="nx-cat-text">
+                <p class="nx-cat-name">\${safeName}</p>
+                <p class="nx-cat-count">\${c.productCount || 0} \${c.productCount === 1 ? 'item' : 'items'}</p>
+              </div>
+            </div>\`;
+        }).join('');
+        root.innerHTML = '<div class="nx-card">' +
+          '<p class="nx-eyebrow">Browse</p>' +
+          '<h3 class="nx-title">Shop by category</h3>' +
+          '<div class="nx-cat-grid">' + tiles + '</div>' +
+        '</div>';
+      }
+
+      function renderProducts(data) {
+        const products = data.products || [];
+        const merchantId = data.merchantId || '';
+        const filterCategory = data.category || '';
+        if (!products.length) {
+          root.innerHTML = '<div class="nx-card"><p class="nx-eyebrow">Browse</p><div class="nx-empty">No products in this category.</div></div>';
+          return;
+        }
+        const tiles = products.map(p => {
+          const imgUrl = p.images && p.images[0] ? p.images[0] : '';
+          const stock = (p.inventoryQuantity != null && p.inventoryQuantity > 0);
+          const stockClass = stock ? 'nx-prod-stock' : 'nx-prod-stock nx-prod-stock-out';
+          const stockText = stock ? '● In stock' : '○ Out of stock';
+          const pid = p.id || '';
+          const ptitle = p.title || '';
+          const args = JSON.stringify({merchantId,productId:pid}).replace(/"/g,'&quot;');
+          const prompt = escapeHtml('Use get_product with merchantId=' + merchantId + ' and productId=' + pid + ' to show details for ' + ptitle);
+          const bg = imgUrl ? "background-image:url('" + imgUrl + "');" : '';
+          return \`
+            <div class="nx-prod" role="button" tabindex="0"
+                 data-call-tool="get_product" data-args="\${args}" data-prompt="\${prompt}">
+              <div class="nx-prod-img" style="\${bg}"></div>
+              <div class="nx-prod-body">
+                <p class="nx-prod-title">\${escapeHtml(ptitle)}</p>
+                <div class="nx-prod-price">\${fmt(p.priceCents)}</div>
+                <div class="\${stockClass}">\${stockText}</div>
+              </div>
+            </div>\`;
+        }).join('');
+        const titleText = filterCategory || 'All products';
+        const eyebrowText = filterCategory ? 'Category' : 'Products';
+        // Chip strip — categories derived from current product set
+        const cats = Array.from(new Set(products.flatMap(p => (p.categories||[])))).slice(0, 8);
+        const chipStrip = cats.length ? (
+          '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">' +
+            (filterCategory ? (
+              '<button data-call-tool="list_categories" data-args="' + JSON.stringify({merchantId}).replace(/"/g,'&quot;') + '" data-prompt="Use list_categories with merchantId=' + merchantId + ' to show all categories" style="padding:5px 10px;border-radius:999px;border:1px solid #E2E8F0;background:#F8FAFC;color:#475569;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;">← All categories</button>'
+            ) : '') +
+            cats.map(c => {
+              const safeC = escapeHtml(c).replace(/"/g,'&quot;');
+              const cArgs = JSON.stringify({merchantId,category:c,limit:24}).replace(/"/g,'&quot;');
+              const cPrompt = 'Use search_products with merchantId=' + merchantId + ' and category=&quot;' + safeC + '&quot; and limit=24';
+              const active = filterCategory === c;
+              const style = active
+                ? 'padding:5px 10px;border-radius:999px;border:1px solid #818CF8;background:#EEF2FF;color:#3730A3;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;'
+                : 'padding:5px 10px;border-radius:999px;border:1px solid #E2E8F0;background:#fff;color:#475569;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;';
+              return '<button data-call-tool="search_products" data-args="' + cArgs + '" data-prompt="' + cPrompt + '" style="' + style + '">' + safeC + '</button>';
+            }).join('') +
+          '</div>'
+        ) : '';
+        root.innerHTML = '<div class="nx-card">' +
+          '<p class="nx-eyebrow">' + eyebrowText + '</p>' +
+          '<h3 class="nx-title">' + escapeHtml(titleText) + ' · ' + products.length + ' ' + (products.length===1?'item':'items') + '</h3>' +
+          chipStrip +
+          '<div class="nx-prod-grid">' + tiles + '</div>' +
+        '</div>';
+      }
+    `,
+  },
+
+  // ── CategoryGrid ──────────────────────────────────────────────────────
+  'category-grid': {
+    emptyHtml: `<div class="nx-card"><div class="nx-empty">Loading categories…</div></div>`,
+    renderJs: `
+      const cats = data.categories || [];
+      const merchantId = data.merchantId || '';
+      if (!cats.length) {
+        root.innerHTML = '<div class="nx-card"><div class="nx-empty">No categories yet.</div></div>';
+        return;
+      }
+      const tiles = cats.map(c => {
+        const safeName = escapeHtml(c.name || '');
+        const argsObj = {merchantId, category: c.name, limit: 24};
+        const args = JSON.stringify(argsObj).replace(/"/g,'&quot;');
+        const prompt = escapeHtml('Use search_products with merchantId=' + merchantId + ' and category="' + (c.name || '') + '" to show ' + (c.name || '') + ' products');
+        const bg = c.sampleImage ? "background-image:url('" + c.sampleImage + "');" : '';
+        return \`
+          <div class="nx-cat" role="button" tabindex="0"
+               data-call-tool="search_products"
+               data-args="\${args}"
+               data-prompt="\${prompt}">
+            <div class="nx-cat-img" style="\${bg}"></div>
+            <div class="nx-cat-overlay"></div>
+            <div class="nx-cat-text">
+              <p class="nx-cat-name">\${safeName}</p>
+              <p class="nx-cat-count">\${c.productCount || 0} \${c.productCount === 1 ? 'item' : 'items'}</p>
+            </div>
+          </div>\`;
+      }).join('');
+      root.innerHTML = '<div class="nx-card">' +
+        '<p class="nx-eyebrow">Browse</p>' +
+        '<h3 class="nx-title">Shop by category</h3>' +
+        '<div class="nx-cat-grid">' + tiles + '</div>' +
+      '</div>';
     `,
   },
 
@@ -143,28 +517,78 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
     emptyHtml: `<div class="nx-card"><div class="nx-empty">Searching…</div></div>`,
     renderJs: `
       const products = data.products || [];
+      const merchantId = data.merchantId || '';
+      const filterCategory = data.category || '';
+      const filterQuery = data.q || '';
       if (!products.length) {
-        root.innerHTML = '<div class="nx-card"><div class="nx-empty">No products matched. Try broader terms.</div></div>';
+        const backArgs = JSON.stringify({merchantId}).replace(/"/g,'&quot;');
+        root.innerHTML = '<div class="nx-card">' +
+          '<p class="nx-breadcrumb">' +
+            (merchantId ? '<a class="nx-breadcrumb-link" data-call-tool="list_categories" data-args="' + backArgs + '" data-prompt="Use list_categories with merchantId=' + merchantId + ' to show all categories">All categories</a>' : 'Search') +
+          '</p>' +
+          '<div class="nx-empty">No products matched. Try a different category or search term.</div>' +
+        '</div>';
         return;
       }
       const tiles = products.map(p => {
-        const img = p.images && p.images[0] ? 'background-image:url(\\'' + escapeHtml(p.images[0]) + '\\');background-size:cover;background-position:center;' : '';
-        const stock = (p.inventoryQuantity != null && p.inventoryQuantity > 0)
-          ? '<span class="nx-pill nx-pill-success">In stock</span>'
-          : '<span class="nx-pill nx-pill-warn">Out of stock</span>';
-        const desc = p.description ? '<p class="nx-tile-meta">' + escapeHtml(p.description.slice(0, 90)) + (p.description.length > 90 ? '…' : '') + '</p>' : '';
+        const imgUrl = p.images && p.images[0] ? p.images[0] : '';
+        const stock = (p.inventoryQuantity != null && p.inventoryQuantity > 0);
+        const stockClass = stock ? 'nx-prod-stock' : 'nx-prod-stock nx-prod-stock-out';
+        const stockText = stock ? '● In stock' : '○ Out of stock';
+        const pid = p.id || '';
+        const ptitle = p.title || '';
+        const args = merchantId
+          ? JSON.stringify({merchantId,productId:pid}).replace(/"/g,'&quot;')
+          : '';
+        const prompt = merchantId
+          ? escapeHtml('Use get_product with merchantId=' + merchantId + ' and productId=' + pid + ' to show details for ' + ptitle)
+          : escapeHtml('Tell me more about ' + ptitle);
+        const clickAttrs = merchantId
+          ? 'role="button" tabindex="0" data-call-tool="get_product" data-args="' + args + '" data-prompt="' + prompt + '"'
+          : 'data-prompt-only="1" data-prompt="' + prompt + '" role="button" tabindex="0"';
+        const bg = imgUrl ? "background-image:url('" + imgUrl + "');" : '';
         return \`
-          <div class="nx-tile">
-            <div class="nx-tile-img" style="\${img}"></div>
-            <div class="nx-tile-body">
-              <p class="nx-tile-title">\${escapeHtml(p.title)}</p>
-              \${desc}
-              <div style="margin-top:6px;">\${stock}</div>
+          <div class="nx-prod" \${clickAttrs}>
+            <div class="nx-prod-img" style="\${bg}"></div>
+            <div class="nx-prod-body">
+              <p class="nx-prod-title">\${escapeHtml(ptitle)}</p>
+              <div class="nx-prod-price">\${fmt(p.priceCents)}</div>
+              <div class="\${stockClass}">\${stockText}</div>
             </div>
-            <div class="nx-tile-price">\${fmt(p.priceCents)}</div>
           </div>\`;
       }).join('');
-      root.innerHTML = '<div class="nx-card"><p class="nx-eyebrow">Search results</p><h3 class="nx-title">' + products.length + ' ' + (products.length===1?'item':'items') + '</h3>' + tiles + '</div>';
+      const titleText = filterCategory
+        ? filterCategory
+        : filterQuery
+          ? '"' + filterQuery + '"'
+          : 'All products';
+      const eyebrowText = filterCategory ? 'Category' : filterQuery ? 'Search results' : 'Products';
+      // Category chip strip — derived from the products themselves so we don't
+      // depend on the list_categories tool being in the agent's manifest.
+      const cats = Array.from(new Set(products.flatMap(p => (p.categories||[])))).slice(0, 8);
+      const chipStrip = cats.length && merchantId ? (
+        '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">' +
+          (filterCategory ? (
+            '<button data-call-tool="search_products" data-args="' + JSON.stringify({merchantId,limit:24}).replace(/"/g,'&quot;') + '" data-prompt="Use search_products with merchantId=' + merchantId + ' and limit=24 to show all products" style="padding:5px 10px;border-radius:999px;border:1px solid #E2E8F0;background:#F8FAFC;color:#475569;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;">← All</button>'
+          ) : '') +
+          cats.map(c => {
+            const safeC = escapeHtml(c).replace(/"/g,'&quot;');
+            const cArgs = JSON.stringify({merchantId,category:c,limit:24}).replace(/"/g,'&quot;');
+            const cPrompt = 'Use search_products with merchantId=' + merchantId + ' and category=&quot;' + safeC + '&quot; to show ' + safeC + ' products';
+            const active = filterCategory === c;
+            const style = active
+              ? 'padding:5px 10px;border-radius:999px;border:1px solid #818CF8;background:#EEF2FF;color:#3730A3;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;'
+              : 'padding:5px 10px;border-radius:999px;border:1px solid #E2E8F0;background:#fff;color:#475569;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;';
+            return '<button data-call-tool="search_products" data-args="' + cArgs + '" data-prompt="' + cPrompt + '" style="' + style + '">' + safeC + '</button>';
+          }).join('') +
+        '</div>'
+      ) : '';
+      root.innerHTML = '<div class="nx-card">' +
+        '<p class="nx-eyebrow">' + eyebrowText + '</p>' +
+        '<h3 class="nx-title">' + escapeHtml(titleText) + ' · ' + products.length + ' ' + (products.length===1?'item':'items') + '</h3>' +
+        chipStrip +
+        '<div class="nx-prod-grid">' + tiles + '</div>' +
+      '</div>';
     `,
   },
 
@@ -174,15 +598,88 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
     renderJs: `
       const p = data.product;
       if (!p) { root.innerHTML = '<div class="nx-card"><div class="nx-empty">Product not found.</div></div>'; return; }
+      const m = data.merchant || {};
+      const merchantId = m.id || '';
+      const modes = m.availableModes || ['IN_APP'];
       const imgStyle = p.images && p.images[0]
         ? 'background-image:url(\\'' + escapeHtml(p.images[0]) + '\\');background-size:cover;background-position:center;'
         : 'background:linear-gradient(135deg,#E0F2FE,#EDE9FE);';
+      const itemArgs = JSON.stringify({merchantId,items:[{productId:p.id,quantity:1}]}).replace(/"/g,'&quot;');
+      const escTitle = escapeHtml(p.title || 'this item');
+      const escMerch = escapeHtml(m.displayName || 'this store');
+      // Stash payment context for the requestCheckout button (read by handler)
+      window.__nx_pay_ctx = {
+        merchantId,
+        merchantName: m.displayName || 'Merchant',
+        productId: p.id,
+        productTitle: p.title,
+        priceCents: p.priceCents,
+        currency: p.currency || 'USD',
+        sku: p.sku,
+      };
+      // Build action buttons based on availableModes
+      const actions = [];
+      // Pay with ChatGPT (native) — uses window.openai.requestCheckout
+      // OpenAI's Apps SDK exposes requestCheckout as a native primitive.
+      // Cards are stored on ChatGPT side (vault), user confirms with biometric.
+      // Falls back gracefully on hosts that don't expose it.
+      actions.push(\`
+        <button class="nx-btn nx-btn-primary nx-btn-chatgpt-pay" data-action="chatgpt-pay">
+          <span>⚡ Pay with ChatGPT</span>
+          <span class="nx-btn-meta">native · 1 tap</span>
+        </button>\`);
+      // Add to cart — neutral
+      actions.push(\`
+        <button class="nx-btn nx-btn-secondary"
+                data-prompt-only="1"
+                data-prompt="Add 1 \${escTitle} to my cart">
+          <span>＋ Add to cart</span>
+        </button>\`);
+      // Buy now in chat (IN_APP, our own card-on-file flow)
+      if (modes.indexOf('IN_APP') >= 0) {
+        actions.push(\`
+          <button class="nx-btn nx-btn-secondary"
+                  data-call-tool="create_checkout"
+                  data-args="\${itemArgs}"
+                  data-prompt="Buy 1 \${escTitle} now using in-chat checkout">
+            <span>🔒 Buy via Nexus card-on-file</span>
+            <span class="nx-btn-meta">in chat</span>
+          </button>\`);
+      }
+      // Pay via secure link (SIGNED_URL)
+      if (modes.indexOf('SIGNED_URL') >= 0) {
+        actions.push(\`
+          <button class="nx-btn nx-btn-secondary"
+                  data-call-tool="create_handoff"
+                  data-args="\${itemArgs}"
+                  data-prompt="Generate a secure checkout link for 1 \${escTitle}">
+            <span>↗ Open secure link</span>
+            <span class="nx-btn-meta">browser</span>
+          </button>\`);
+      }
+      // Pay on merchant site (MERCHANT_PAGE)
+      if (modes.indexOf('MERCHANT_PAGE') >= 0) {
+        actions.push(\`
+          <button class="nx-btn nx-btn-secondary"
+                  data-prompt-only="1"
+                  data-prompt="Take me to \${escMerch}'s own checkout for 1 \${escTitle}">
+            <span>🏬 Pay on \${escMerch}</span>
+            <span class="nx-btn-meta">merchant site</span>
+          </button>\`);
+      }
+      const optionsLabel = m.isMock
+        ? '<p class="nx-eyebrow" style="margin:14px 0 8px;">Demo · all 3 options</p>'
+        : modes.length > 1
+          ? '<p class="nx-eyebrow" style="margin:14px 0 8px;">Checkout options</p>'
+          : '<p class="nx-eyebrow" style="margin:14px 0 8px;">Checkout</p>';
       root.innerHTML = '<div class="nx-card">' +
         '<div style="width:100%;aspect-ratio:16/9;border-radius:10px;margin-bottom:14px;' + imgStyle + '"></div>' +
         '<h3 class="nx-title">' + escapeHtml(p.title) + '</h3>' +
-        '<p class="nx-tile-meta" style="margin-bottom:10px;">SKU ' + escapeHtml(p.sku) + '</p>' +
-        (p.description ? '<p style="font-size:13px;color:#475569;margin:0 0 14px;">' + escapeHtml(p.description) + '</p>' : '') +
-        '<div class="nx-grand"><span class="nx-grand-label">Price</span><span class="nx-grand-amount">' + fmt(p.priceCents) + '</span></div>' +
+        '<p class="nx-tile-meta" style="margin-bottom:10px;">SKU ' + escapeHtml(p.sku || '') + (m.displayName ? ' · ' + escMerch : '') + '</p>' +
+        (p.description ? '<p style="font-size:13px;color:#475569;margin:0 0 14px;line-height:1.55;">' + escapeHtml(p.description) + '</p>' : '') +
+        '<div class="nx-grand" style="margin-bottom:4px;"><span class="nx-grand-label">Price</span><span class="nx-grand-amount">' + fmt(p.priceCents) + '</span></div>' +
+        optionsLabel +
+        '<div class="nx-actions">' + actions.join('') + '</div>' +
       '</div>';
     `,
   },
@@ -193,6 +690,20 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
     renderJs: `
       const c = data.checkout || data;
       const items = (c.metadata && c.metadata.items) || [];
+      const checkoutId = c.id || c.checkoutId || '';
+      const totalCents = c.totalCents || 0;
+      const merchantName = c.merchantName || 'Order';
+      // Stash for the chatgpt-pay button
+      window.__nx_pay_ctx = {
+        merchantId: c.merchantId,
+        merchantName: merchantName,
+        productId: items[0] && items[0].sku,
+        productTitle: items.length === 1 ? items[0].title : (items.length + ' items'),
+        priceCents: totalCents,
+        currency: c.currency || 'USD',
+        sku: items[0] && items[0].sku,
+        checkoutId: checkoutId,
+      };
       const itemHtml = items.map(it => \`
         <div class="nx-row">
           <div>
@@ -201,15 +712,29 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           </div>
           <div class="nx-amount">\${fmt(it.lineTotalCents)}</div>
         </div>\`).join('');
+      const completeArgs = JSON.stringify({checkoutId, paymentMethod:'demo'}).replace(/"/g,'&quot;');
+      const completePrompt = escapeHtml('Use complete_checkout with checkoutId=' + checkoutId + ' to charge the demo card and confirm this order');
+      const escMerch = escapeHtml(merchantName);
       root.innerHTML = '<div class="nx-card"><p class="nx-eyebrow">Order summary</p>' +
-        '<h3 class="nx-title">' + escapeHtml(c.merchantName || 'Order') + '</h3>' +
+        '<h3 class="nx-title">' + escMerch + '</h3>' +
         '<div>' + itemHtml + '</div>' +
         '<div class="nx-totals">' +
           '<div class="nx-totals-row"><span>Subtotal</span><span class="nx-amount">' + fmt(c.subtotalCents) + '</span></div>' +
           '<div class="nx-totals-row"><span>Shipping</span><span class="nx-amount">' + fmt(c.shippingCostCents) + '</span></div>' +
           '<div class="nx-totals-row"><span>Tax</span><span class="nx-amount">' + fmt(c.taxCents) + '</span></div>' +
-          '<div class="nx-grand"><span class="nx-grand-label">Total</span><span class="nx-grand-amount">' + fmt(c.totalCents) + '</span></div>' +
-        '</div></div>';
+          '<div class="nx-grand"><span class="nx-grand-label">Total</span><span class="nx-grand-amount">' + fmt(totalCents) + '</span></div>' +
+        '</div>' +
+        '<div class="nx-actions" style="margin-top:18px;">' +
+          '<button class="nx-btn nx-btn-primary nx-btn-chatgpt-pay" data-action="chatgpt-pay">' +
+            '<span>⚡ Pay with ChatGPT</span>' +
+            '<span class="nx-btn-meta">native · 1 tap</span>' +
+          '</button>' +
+          '<button class="nx-btn nx-btn-secondary" data-call-tool="complete_checkout" data-args="' + completeArgs + '" data-prompt="' + completePrompt + '">' +
+            '<span>🔒 Confirm &amp; Pay ' + fmt(totalCents) + '</span>' +
+            '<span class="nx-btn-meta">demo card</span>' +
+          '</button>' +
+        '</div>' +
+      '</div>';
     `,
   },
 

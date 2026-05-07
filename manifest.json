@@ -13,10 +13,8 @@
     "privacyPolicyUrl": "https://agentix-nexus.fly.dev/privacy"
   },
   "auth": {
-    "type": "oauth2",
-    "authorizationUrl": "https://agentix-nexus.fly.dev/oauth/authorize",
-    "tokenUrl": "https://agentix-nexus.fly.dev/oauth/token",
-    "scopes": ["openid", "email", "profile", "shopping.read", "shopping.checkout"]
+    "type": "none",
+    "_comment": "Anonymous-by-default: shoppers can browse, search, and use signed-link checkout (Flow B) without any account. Per-merchant in-chat checkout (IN_APP) future feature will request a JWT only when invoked, not at install time."
   },
   "mcp": {
     "endpoint": "/mcp",

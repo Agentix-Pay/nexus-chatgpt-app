@@ -5,6 +5,7 @@
  */
 
 import { listMerchantsTool } from './list-merchants.js';
+import { listCategoriesTool } from './list-categories.js';
 import { searchProductsTool } from './search-products.js';
 import { getProductTool } from './get-product.js';
 import { createCheckoutTool } from './create-checkout.js';
@@ -14,6 +15,7 @@ import { getOrderStatusTool } from './get-order-status.js';
 
 export const tools = [
   listMerchantsTool,
+  listCategoriesTool,
   searchProductsTool,
   getProductTool,
   createCheckoutTool,
