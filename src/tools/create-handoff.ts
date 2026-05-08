@@ -18,7 +18,7 @@ const inputSchema = z.object({
 export const createHandoffTool = {
   name: 'create_handoff',
   description:
-    "Generate a secure checkout link the shopper opens in their browser (Flow B). Use this when the merchant.checkoutMode is SIGNED_URL or MERCHANT_PAGE, or when the shopper asks for a link. The response.checkoutHost field tells you whether the link points to our hosted shell or the merchant's own checkout (Shopify, etc.) — surface that in the UI so the shopper knows what they're clicking.",
+    "Generate a secure browser checkout link (Flow B) — returns a clickable URL the shopper opens to complete payment outside the chat. ALWAYS USE THIS when the shopper says any of: \"secure link\", \"checkout link\", \"checkout URL\", \"open secure checkout\", \"browser checkout\", or clicks an 'Open secure link' button. Also use when merchant.checkoutMode is SIGNED_URL or MERCHANT_PAGE. Do NOT use create_checkout for these requests — that one starts an in-chat charge flow, which is wrong. The response.checkoutHost field tells you whether the link points to our hosted shell or the merchant's own checkout (Shopify, etc.) — surface that in the UI so the shopper knows what they're clicking.",
   inputSchema,
   outputUI: 'CheckoutLinkCard',
   annotations: { title: 'Get checkout link', readOnlyHint: false, openWorldHint: false, destructiveHint: false },

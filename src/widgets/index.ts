@@ -641,18 +641,21 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           <button class="nx-btn nx-btn-secondary"
                   data-call-tool="create_checkout"
                   data-args="\${itemArgs}"
-                  data-prompt="Buy 1 \${escTitle} now using in-chat checkout">
+                  data-prompt="Use the create_checkout tool (NOT create_handoff) to start an in-chat checkout for 1 \${escTitle}. Do not generate a browser link.">
             <span>🔒 Buy via Nexus card-on-file</span>
             <span class="nx-btn-meta">in chat</span>
           </button>\`);
       }
-      // Pay via secure link (SIGNED_URL)
+      // Pay via secure link (SIGNED_URL) — Flow B, browser handoff.
+      // NOTE: ChatGPT's data-call-tool is a hint, not a hard binding — the
+      // GPT may still pick a different tool if the prompt is ambiguous.
+      // Naming the tool explicitly in data-prompt is the load-bearing part.
       if (modes.indexOf('SIGNED_URL') >= 0) {
         actions.push(\`
           <button class="nx-btn nx-btn-secondary"
                   data-call-tool="create_handoff"
                   data-args="\${itemArgs}"
-                  data-prompt="Generate a secure checkout link for 1 \${escTitle}">
+                  data-prompt="Use the create_handoff tool (NOT create_checkout) to generate a browser checkout link for 1 \${escTitle}. Return the checkout-link widget with a clickable URL. Do not start an in-chat checkout.">
             <span>↗ Open secure link</span>
             <span class="nx-btn-meta">browser</span>
           </button>\`);
