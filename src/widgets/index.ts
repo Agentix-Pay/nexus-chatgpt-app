@@ -311,17 +311,20 @@ window.addEventListener('message',(e)=>{
 },{passive:true});
 // Signal ready (harmless if ignored)
 try{window.parent&&window.parent.postMessage({jsonrpc:'2.0',method:'ui/ready'},'*');}catch(e){}
-// Debug: if nothing arrived in 1.5s, dump what we can see so the screenshot reveals the protocol
-setTimeout(()=>{
-  if(__rendered)return;
-  const dbg={
-    hasWindowOpenAI: !!window.openai,
-    openaiKeys: window.openai?Object.keys(window.openai):[],
-    toolOutputType: window.openai&&typeof window.openai.toolOutput,
-    href: location.href,
-  };
-  root.innerHTML='<div class="nx-card"><p class="nx-eyebrow">Widget debug</p><pre style="margin:0;font-size:11px;font-family:ui-monospace,monospace;color:#475569;white-space:pre-wrap;">'+escapeHtml(JSON.stringify(dbg,null,2))+'</pre></div>';
-},1500);
+// Debug overlay — gated behind ?debug=1 so the inspector doesn't flash on slow data.
+// If nothing arrived in 1.5s AND debug is on, dump what we can see.
+if(/[?&]debug=1\b/.test(location.search||'')){
+  setTimeout(()=>{
+    if(__rendered)return;
+    const dbg={
+      hasWindowOpenAI: !!window.openai,
+      openaiKeys: window.openai?Object.keys(window.openai):[],
+      toolOutputType: window.openai&&typeof window.openai.toolOutput,
+      href: location.href,
+    };
+    root.innerHTML='<div class="nx-card"><p class="nx-eyebrow">Widget debug</p><pre style="margin:0;font-size:11px;font-family:ui-monospace,monospace;color:#475569;white-space:pre-wrap;">'+escapeHtml(JSON.stringify(dbg,null,2))+'</pre></div>';
+  },1500);
+}
 `;
 
 interface WidgetSpec {
@@ -365,7 +368,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           const id = m.id || '';
           const name = m.displayName || '';
           const args = JSON.stringify({merchantId:id}).replace(/"/g,'&quot;');
-          const prompt = escapeHtml('Use the list_categories tool to show me product categories at ' + name + ' (merchantId: ' + id + ')');
+          const prompt = escapeHtml('Browse ' + name);
           return \`
             <div class="nx-tile nx-tile-clickable" role="button" tabindex="0"
                  data-call-tool="list_categories"
@@ -393,7 +396,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           const safeName = escapeHtml(c.name || '');
           const argsObj = {merchantId, category: c.name, limit: 24};
           const args = JSON.stringify(argsObj).replace(/"/g,'&quot;');
-          const prompt = escapeHtml('Use search_products with merchantId=' + merchantId + ' and category="' + (c.name || '') + '" and limit=24 to list products');
+          const prompt = escapeHtml('Show me ' + (c.name || '') + ' products');
           const bg = c.sampleImage ? "background-image:url('" + c.sampleImage + "');" : '';
           return \`
             <div class="nx-cat" role="button" tabindex="0"
@@ -431,7 +434,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           const pid = p.id || '';
           const ptitle = p.title || '';
           const args = JSON.stringify({merchantId,productId:pid}).replace(/"/g,'&quot;');
-          const prompt = escapeHtml('Use get_product with merchantId=' + merchantId + ' and productId=' + pid + ' to show details for ' + ptitle);
+          const prompt = escapeHtml('Tell me about ' + ptitle);
           const bg = imgUrl ? "background-image:url('" + imgUrl + "');" : '';
           return \`
             <div class="nx-prod" role="button" tabindex="0"
@@ -451,12 +454,12 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         const chipStrip = cats.length ? (
           '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">' +
             (filterCategory ? (
-              '<button data-call-tool="list_categories" data-args="' + JSON.stringify({merchantId}).replace(/"/g,'&quot;') + '" data-prompt="Use list_categories with merchantId=' + merchantId + ' to show all categories" style="padding:5px 10px;border-radius:999px;border:1px solid #E2E8F0;background:#F8FAFC;color:#475569;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;">← All categories</button>'
+              '<button data-call-tool="list_categories" data-args="' + JSON.stringify({merchantId}).replace(/"/g,'&quot;') + '" data-prompt="Show all categories" style="padding:5px 10px;border-radius:999px;border:1px solid #E2E8F0;background:#F8FAFC;color:#475569;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;">← All categories</button>'
             ) : '') +
             cats.map(c => {
               const safeC = escapeHtml(c).replace(/"/g,'&quot;');
               const cArgs = JSON.stringify({merchantId,category:c,limit:24}).replace(/"/g,'&quot;');
-              const cPrompt = 'Use search_products with merchantId=' + merchantId + ' and category=&quot;' + safeC + '&quot; and limit=24';
+              const cPrompt = 'Show ' + safeC;
               const active = filterCategory === c;
               const style = active
                 ? 'padding:5px 10px;border-radius:999px;border:1px solid #818CF8;background:#EEF2FF;color:#3730A3;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;'
@@ -489,7 +492,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         const safeName = escapeHtml(c.name || '');
         const argsObj = {merchantId, category: c.name, limit: 24};
         const args = JSON.stringify(argsObj).replace(/"/g,'&quot;');
-        const prompt = escapeHtml('Use search_products with merchantId=' + merchantId + ' and category="' + (c.name || '') + '" to show ' + (c.name || '') + ' products');
+        const prompt = escapeHtml('Show me ' + (c.name || '') + ' products');
         const bg = c.sampleImage ? "background-image:url('" + c.sampleImage + "');" : '';
         return \`
           <div class="nx-cat" role="button" tabindex="0"
@@ -524,7 +527,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         const backArgs = JSON.stringify({merchantId}).replace(/"/g,'&quot;');
         root.innerHTML = '<div class="nx-card">' +
           '<p class="nx-breadcrumb">' +
-            (merchantId ? '<a class="nx-breadcrumb-link" data-call-tool="list_categories" data-args="' + backArgs + '" data-prompt="Use list_categories with merchantId=' + merchantId + ' to show all categories">All categories</a>' : 'Search') +
+            (merchantId ? '<a class="nx-breadcrumb-link" data-call-tool="list_categories" data-args="' + backArgs + '" data-prompt="Show all categories">All categories</a>' : 'Search') +
           '</p>' +
           '<div class="nx-empty">No products matched. Try a different category or search term.</div>' +
         '</div>';
@@ -541,7 +544,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           ? JSON.stringify({merchantId,productId:pid}).replace(/"/g,'&quot;')
           : '';
         const prompt = merchantId
-          ? escapeHtml('Use get_product with merchantId=' + merchantId + ' and productId=' + pid + ' to show details for ' + ptitle)
+          ? escapeHtml('Tell me about ' + ptitle)
           : escapeHtml('Tell me more about ' + ptitle);
         const clickAttrs = merchantId
           ? 'role="button" tabindex="0" data-call-tool="get_product" data-args="' + args + '" data-prompt="' + prompt + '"'
@@ -569,12 +572,12 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
       const chipStrip = cats.length && merchantId ? (
         '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">' +
           (filterCategory ? (
-            '<button data-call-tool="search_products" data-args="' + JSON.stringify({merchantId,limit:24}).replace(/"/g,'&quot;') + '" data-prompt="Use search_products with merchantId=' + merchantId + ' and limit=24 to show all products" style="padding:5px 10px;border-radius:999px;border:1px solid #E2E8F0;background:#F8FAFC;color:#475569;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;">← All</button>'
+            '<button data-call-tool="search_products" data-args="' + JSON.stringify({merchantId,limit:24}).replace(/"/g,'&quot;') + '" data-prompt="Show all products" style="padding:5px 10px;border-radius:999px;border:1px solid #E2E8F0;background:#F8FAFC;color:#475569;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;">← All</button>'
           ) : '') +
           cats.map(c => {
             const safeC = escapeHtml(c).replace(/"/g,'&quot;');
             const cArgs = JSON.stringify({merchantId,category:c,limit:24}).replace(/"/g,'&quot;');
-            const cPrompt = 'Use search_products with merchantId=' + merchantId + ' and category=&quot;' + safeC + '&quot; to show ' + safeC + ' products';
+            const cPrompt = 'Show ' + safeC;
             const active = filterCategory === c;
             const style = active
               ? 'padding:5px 10px;border-radius:999px;border:1px solid #818CF8;background:#EEF2FF;color:#3730A3;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;'
@@ -617,57 +620,51 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         currency: p.currency || 'USD',
         sku: p.sku,
       };
-      // Build action buttons based on availableModes
+      // Build action buttons based on availableModes.
+      // Demo scope: only SIGNED_URL is wired end-to-end. IN_APP, MERCHANT_PAGE,
+      // and CHATGPT_PAY are rendered as disabled stubs so the three-flow story
+      // is visible, but they can't be tapped — keeps the demo on rails.
       const actions = [];
-      // Pay with ChatGPT (native) — uses window.openai.requestCheckout
-      // OpenAI's Apps SDK exposes requestCheckout as a native primitive.
-      // Cards are stored on ChatGPT side (vault), user confirms with biometric.
-      // Falls back gracefully on hosts that don't expose it.
+      const disabledStyle = 'opacity:0.45;cursor:not-allowed;filter:grayscale(0.25);';
+      // Pay with ChatGPT (native, requestCheckout) — stub for demo
       actions.push(\`
-        <button class="nx-btn nx-btn-primary nx-btn-chatgpt-pay" data-action="chatgpt-pay">
+        <button class="nx-btn nx-btn-secondary" disabled aria-disabled="true" style="\${disabledStyle}">
           <span>⚡ Pay with ChatGPT</span>
-          <span class="nx-btn-meta">native · 1 tap</span>
+          <span class="nx-btn-meta">Coming soon</span>
         </button>\`);
-      // Add to cart — neutral
+      // Add to cart — neutral (sends a chat message)
       actions.push(\`
         <button class="nx-btn nx-btn-secondary"
                 data-prompt-only="1"
                 data-prompt="Add 1 \${escTitle} to my cart">
           <span>＋ Add to cart</span>
         </button>\`);
-      // Buy now in chat (IN_APP, our own card-on-file flow)
+      // Buy now in chat (IN_APP) — stub for demo, gated by merchant mode
       if (modes.indexOf('IN_APP') >= 0) {
         actions.push(\`
-          <button class="nx-btn nx-btn-secondary"
-                  data-call-tool="create_checkout"
-                  data-args="\${itemArgs}"
-                  data-prompt="Use the create_checkout tool (NOT create_handoff) to start an in-chat checkout for 1 \${escTitle}. Do not generate a browser link.">
+          <button class="nx-btn nx-btn-secondary" disabled aria-disabled="true" style="\${disabledStyle}">
             <span>🔒 Buy via Nexus card-on-file</span>
-            <span class="nx-btn-meta">in chat</span>
+            <span class="nx-btn-meta">Coming soon</span>
           </button>\`);
       }
-      // Pay via secure link (SIGNED_URL) — Flow B, browser handoff.
-      // NOTE: ChatGPT's data-call-tool is a hint, not a hard binding — the
-      // GPT may still pick a different tool if the prompt is ambiguous.
-      // Naming the tool explicitly in data-prompt is the load-bearing part.
+      // Pay via secure link (SIGNED_URL) — Flow B, browser handoff. The only
+      // checkout flow that's live for the demo.
       if (modes.indexOf('SIGNED_URL') >= 0) {
         actions.push(\`
-          <button class="nx-btn nx-btn-secondary"
+          <button class="nx-btn nx-btn-primary"
                   data-call-tool="create_handoff"
                   data-args="\${itemArgs}"
-                  data-prompt="Use the create_handoff tool (NOT create_checkout) to generate a browser checkout link for 1 \${escTitle}. Return the checkout-link widget with a clickable URL. Do not start an in-chat checkout.">
+                  data-prompt="Generate a secure browser checkout link for 1 \${escTitle}">
             <span>↗ Open secure link</span>
             <span class="nx-btn-meta">browser</span>
           </button>\`);
       }
-      // Pay on merchant site (MERCHANT_PAGE)
+      // Pay on merchant site (MERCHANT_PAGE) — stub for demo
       if (modes.indexOf('MERCHANT_PAGE') >= 0) {
         actions.push(\`
-          <button class="nx-btn nx-btn-secondary"
-                  data-prompt-only="1"
-                  data-prompt="Take me to \${escMerch}'s own checkout for 1 \${escTitle}">
+          <button class="nx-btn nx-btn-secondary" disabled aria-disabled="true" style="\${disabledStyle}">
             <span>🏬 Pay on \${escMerch}</span>
-            <span class="nx-btn-meta">merchant site</span>
+            <span class="nx-btn-meta">Coming soon</span>
           </button>\`);
       }
       const optionsLabel = m.isMock
@@ -774,12 +771,30 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         : 'Secure checkout hosted by Agentix.';
       const expires = data.expiresAt ? new Date(data.expiresAt) : new Date(Date.now() + 60*60_000);
       const minutes = Math.max(0, Math.round((expires.getTime() - Date.now())/60_000));
-      const orderId = (data.pendingOrderId || data.orderId || '').slice(0,8).toUpperCase();
+      const rawOrderId = data.pendingOrderId || data.orderId || '';
+      const orderId = rawOrderId.slice(0,8).toUpperCase();
+      // Post-checkout signal: once the shopper completes payment in the browser
+      // and returns to chat, this tap-to-confirm action calls get_order_status
+      // with the pendingOrderId. Nexus auto-bridges pendingOrder → Order on
+      // payment completion, so the OrderStatusCard renders with the confirmation
+      // summary inline. True autonomous push-back is a future webhook project.
+      const statusArgs = JSON.stringify({orderId: rawOrderId}).replace(/"/g,'&quot;');
+      const statusPrompt = 'Did my order go through?';
+      const statusBtn = rawOrderId ? (
+        '<button class="nx-btn nx-btn-secondary" style="margin-top:10px;"' +
+                ' data-call-tool="get_order_status"' +
+                ' data-args="' + statusArgs + '"' +
+                ' data-prompt="' + statusPrompt + '">' +
+          '<span>✓ Check order status</span>' +
+          '<span class="nx-btn-meta">after paying</span>' +
+        '</button>'
+      ) : '';
       root.innerHTML = '<div class="nx-card"><p class="nx-eyebrow">Checkout link ready</p>' +
         '<h3 class="nx-title">' + escapeHtml(merchant) + ' · ' + fmt(total) + '</h3>' +
         '<p class="nx-meta" style="margin-bottom:12px;">Order ' + escapeHtml(orderId) + ' · Expires in ' + minutes + ' min</p>' +
         '<a href="' + escapeHtml(url) + '" target="_top" class="nx-button nx-button-gradient" style="text-decoration:none;">🔒 Open secure checkout →</a>' +
-        '<p style="margin-top:10px;font-size:12px;color:#64748B;">' + where + '</p>' +
+        statusBtn +
+        '<p style="margin-top:10px;font-size:12px;color:#64748B;">' + where + ' Once you\\'ve paid, tap <strong>Check order status</strong> to confirm.</p>' +
       '</div>';
     `,
   },
