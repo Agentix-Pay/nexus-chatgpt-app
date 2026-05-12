@@ -368,7 +368,10 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           const id = m.id || '';
           const name = m.displayName || '';
           const args = JSON.stringify({merchantId:id}).replace(/"/g,'&quot;');
-          const prompt = escapeHtml('Browse ' + name);
+          // Mentioning "categories" explicitly is load-bearing — without it the
+          // GPT routes "Browse <name>" back to list_merchants instead of
+          // list_categories. The tool description lists this exact trigger phrase.
+          const prompt = escapeHtml('Show me categories at ' + name);
           return \`
             <div class="nx-tile nx-tile-clickable" role="button" tabindex="0"
                  data-call-tool="list_categories"
