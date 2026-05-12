@@ -771,12 +771,30 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         : 'Secure checkout hosted by Agentix.';
       const expires = data.expiresAt ? new Date(data.expiresAt) : new Date(Date.now() + 60*60_000);
       const minutes = Math.max(0, Math.round((expires.getTime() - Date.now())/60_000));
-      const orderId = (data.pendingOrderId || data.orderId || '').slice(0,8).toUpperCase();
+      const rawOrderId = data.pendingOrderId || data.orderId || '';
+      const orderId = rawOrderId.slice(0,8).toUpperCase();
+      // Post-checkout signal: once the shopper completes payment in the browser
+      // and returns to chat, this tap-to-confirm action calls get_order_status
+      // with the pendingOrderId. Nexus auto-bridges pendingOrder → Order on
+      // payment completion, so the OrderStatusCard renders with the confirmation
+      // summary inline. True autonomous push-back is a future webhook project.
+      const statusArgs = JSON.stringify({orderId: rawOrderId}).replace(/"/g,'&quot;');
+      const statusPrompt = 'Did my order go through?';
+      const statusBtn = rawOrderId ? (
+        '<button class="nx-btn nx-btn-secondary" style="margin-top:10px;"' +
+                ' data-call-tool="get_order_status"' +
+                ' data-args="' + statusArgs + '"' +
+                ' data-prompt="' + statusPrompt + '">' +
+          '<span>✓ Check order status</span>' +
+          '<span class="nx-btn-meta">after paying</span>' +
+        '</button>'
+      ) : '';
       root.innerHTML = '<div class="nx-card"><p class="nx-eyebrow">Checkout link ready</p>' +
         '<h3 class="nx-title">' + escapeHtml(merchant) + ' · ' + fmt(total) + '</h3>' +
         '<p class="nx-meta" style="margin-bottom:12px;">Order ' + escapeHtml(orderId) + ' · Expires in ' + minutes + ' min</p>' +
         '<a href="' + escapeHtml(url) + '" target="_top" class="nx-button nx-button-gradient" style="text-decoration:none;">🔒 Open secure checkout →</a>' +
-        '<p style="margin-top:10px;font-size:12px;color:#64748B;">' + where + '</p>' +
+        statusBtn +
+        '<p style="margin-top:10px;font-size:12px;color:#64748B;">' + where + ' Once you\\'ve paid, tap <strong>Check order status</strong> to confirm.</p>' +
       '</div>';
     `,
   },
