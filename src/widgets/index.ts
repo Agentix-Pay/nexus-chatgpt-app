@@ -38,7 +38,7 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 4;
+const WIDGET_VERSION = 5;
 
 /** Map a tool's outputUI value to its widget URI. */
 export function widgetUri(outputUI: string): string {
@@ -516,7 +516,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           // Use a real <img> with onerror — CSP blocks and 404s now hide the
           // img cleanly, exposing the placeholder layer underneath.
           const imgTag = imgUrl
-            ? '<img src="' + escapeHtml(imgUrl) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">'
+            ? '<img src="' + escapeHtml(imgUrl) + '" alt="" loading="lazy" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">'
             : '';
           // Inline placeholder — emoji + bright gradient on the div directly,
           // so even if the .nx-prod-img class CSS gets overridden / not loaded,
@@ -649,7 +649,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           : 'data-prompt-only="1" data-prompt="' + prompt + '" role="button" tabindex="0"';
         // Real <img> with onerror + inline placeholder — see merchant-list note for why.
         const imgTag = imgUrl
-          ? '<img src="' + escapeHtml(imgUrl) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">'
+          ? '<img src="' + escapeHtml(imgUrl) + '" alt="" loading="lazy" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">'
           : '';
         // Fixed pixel height + solid background — maximally compatible across
         // browser engines and any aggressive HTML sanitization. aspect-ratio
@@ -730,7 +730,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
       // Hero image — real <img> with onerror so CSP blocks / 404s reveal the
       // gradient placeholder underneath instead of leaving a pure-white area.
       const heroImg = p.images && p.images[0]
-        ? '<img src="' + escapeHtml(p.images[0]) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">'
+        ? '<img src="' + escapeHtml(p.images[0]) + '" alt="" loading="lazy" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">'
         : '';
       const itemArgs = JSON.stringify({merchantId,items:[{productId:p.id,quantity:1}]}).replace(/"/g,'&quot;');
       const escTitle = escapeHtml(p.title || 'this item');
