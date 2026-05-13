@@ -28,6 +28,7 @@ export const WIDGET_NAMES = [
   'checkout-link',
   'order-confirmation',
   'order-status',
+  'cart-view',
 ] as const;
 
 export type WidgetName = (typeof WIDGET_NAMES)[number];
@@ -38,7 +39,7 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 11;
+const WIDGET_VERSION = 12;
 
 /** Map a tool's outputUI value to its widget URI. */
 export function widgetUri(outputUI: string): string {
@@ -56,6 +57,7 @@ export function widgetUri(outputUI: string): string {
     CheckoutLinkCard: 'checkout-link',
     OrderConfirmation: 'order-confirmation',
     OrderStatusCard: 'order-status',
+    CartView: 'cart-view',
   };
   const name = map[outputUI] ?? 'merchant-list';
   return `ui://widget/${name}.html?v=${WIDGET_VERSION}`;
@@ -520,6 +522,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
       function renderProducts(data) {
         const products = data.products || [];
         const merchantId = data.merchantId || '';
+        const merchantName = data.merchantName || '';
         const filterCategory = data.category || '';
         if (!products.length) {
           root.innerHTML = '<div class="nx-card"><p class="nx-eyebrow">Browse</p><div class="nx-empty">No products in this category.</div></div>';
@@ -536,6 +539,20 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           const prompt = escapeHtml('Tell me about ' + ptitle);
           const handoffArgs = JSON.stringify({merchantId, items:[{productId:pid, quantity:1}]}).replace(/"/g,'&quot;');
           const buyPrompt = escapeHtml('Generate a secure browser checkout link for 1 ' + ptitle);
+          // Add-to-cart context: full product details so the server can hold a
+          // rich cart entry without another lookup. merchantName for friendly
+          // cart display.
+          const addCartArgs = JSON.stringify({
+            merchantId,
+            merchantName: merchantName || undefined,
+            productId: pid,
+            sku: p.sku || '',
+            title: ptitle,
+            priceCents: p.priceCents || 0,
+            currency: p.currency || 'USD',
+            quantity: 1,
+          }).replace(/"/g,'&quot;');
+          const addCartPrompt = escapeHtml('Add 1 ' + ptitle + ' to my cart');
           // Use a real <img> with onerror — CSP blocks and 404s now hide the
           // img cleanly, exposing the placeholder layer underneath.
           const imgTag = imgUrl
@@ -556,6 +573,8 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
                 <div class="nx-prod-price">\${fmt(p.priceCents)}</div>
                 <div class="\${stockClass}">\${stockText}</div>
                 <div style="display:flex;gap:6px;margin-top:8px;">
+                  <button style="flex:1;padding:6px 4px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid #E2E8F0;background:#fff;color:#475569;cursor:pointer;pointer-events:auto;font-family:inherit;"
+                          data-call-tool="add_to_cart" data-args="\${addCartArgs}" data-prompt="\${addCartPrompt}" title="Add to cart">＋ Add</button>
                   <button style="flex:1;padding:6px 4px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid #E2E8F0;background:#fff;color:#475569;cursor:pointer;pointer-events:auto;font-family:inherit;"
                           data-call-tool="get_product" data-args="\${args}" data-prompt="\${prompt}" title="View details">Details</button>
                   <button style="flex:1;padding:6px 4px;font-size:11px;font-weight:700;border-radius:6px;border:0;background:linear-gradient(135deg,#67E8F9,#818CF8 50%,#C084FC);color:#0B0F2A;cursor:pointer;pointer-events:auto;font-family:inherit;"
@@ -636,6 +655,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
     renderJs: `
       const products = data.products || [];
       const merchantId = data.merchantId || '';
+      const merchantName = data.merchantName || '';
       const filterCategory = data.category || '';
       const filterQuery = data.q || '';
       if (!products.length) {
@@ -678,8 +698,23 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           ? JSON.stringify({merchantId, items:[{productId:pid, quantity:1}]}).replace(/"/g,'&quot;')
           : '';
         const buyPrompt = escapeHtml('Generate a secure browser checkout link for 1 ' + ptitle);
+        const addCartArgs = merchantId
+          ? JSON.stringify({
+              merchantId,
+              merchantName: merchantName || undefined,
+              productId: pid,
+              sku: p.sku || '',
+              title: ptitle,
+              priceCents: p.priceCents || 0,
+              currency: p.currency || 'USD',
+              quantity: 1,
+            }).replace(/"/g,'&quot;')
+          : '';
+        const addCartPrompt = escapeHtml('Add 1 ' + ptitle + ' to my cart');
         const tileActions = merchantId ? (
           '<div style="display:flex;gap:6px;margin-top:8px;">' +
+            '<button style="flex:1;padding:6px 4px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid #E2E8F0;background:#fff;color:#475569;cursor:pointer;pointer-events:auto;font-family:inherit;"' +
+                   ' data-call-tool="add_to_cart" data-args="' + addCartArgs + '" data-prompt="' + addCartPrompt + '" title="Add to cart">＋ Add</button>' +
             '<button style="flex:1;padding:6px 4px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid #E2E8F0;background:#fff;color:#475569;cursor:pointer;pointer-events:auto;font-family:inherit;"' +
                    ' data-call-tool="get_product" data-args="' + args + '" data-prompt="' + prompt + '" title="View details">Details</button>' +
             '<button style="flex:1;padding:6px 4px;font-size:11px;font-weight:700;border-radius:6px;border:0;background:linear-gradient(135deg,#67E8F9,#818CF8 50%,#C084FC);color:#0B0F2A;cursor:pointer;pointer-events:auto;font-family:inherit;"' +
@@ -767,6 +802,24 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
       // stubs, and won't get a "Pay with ChatGPT" stub it didn't ask for.
       const actions = [];
       const disabledStyle = 'opacity:0.45;cursor:not-allowed;filter:grayscale(0.25);';
+      // Add to cart — live, neutral. Cart is per-conversation and per-merchant.
+      const addCartArgs = JSON.stringify({
+        merchantId,
+        merchantName: m.displayName || undefined,
+        productId: p.id,
+        sku: p.sku || '',
+        title: p.title || '',
+        priceCents: p.priceCents || 0,
+        currency: p.currency || 'USD',
+        quantity: 1,
+      }).replace(/"/g,'&quot;');
+      actions.push(\`
+        <button class="nx-btn nx-btn-secondary"
+                data-call-tool="add_to_cart"
+                data-args="\${addCartArgs}"
+                data-prompt="Add 1 \${escTitle} to my cart">
+          <span>＋ Add to cart</span>
+        </button>\`);
       // Pay with ChatGPT (native, requestCheckout) — gated on merchant claiming CHATGPT_PAY
       if (modes.indexOf('CHATGPT_PAY') >= 0) {
         actions.push(\`
@@ -1013,6 +1066,71 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         (o.fulfillmentStatus ? '<div class="nx-row"><span>Fulfillment</span><span>' + escapeHtml(o.fulfillmentStatus) + '</span></div>' : '') +
         '<div class="nx-row"><span>Total</span><span class="nx-amount">' + fmt(o.totalCents) + '</span></div>' +
         tracking +
+      '</div>';
+    `,
+  },
+
+  // ── CartView ──────────────────────────────────────────────────────────
+  'cart-view': {
+    emptyHtml: `<div class="nx-card"><div class="nx-empty">Loading cart…</div></div>`,
+    renderJs: `
+      const cart = data.cart || {};
+      const items = cart.items || [];
+      const subtotalCents = Number(data.subtotalCents || 0);
+      const itemCount = Number(data.itemCount || 0);
+      const merchantName = cart.merchantName || cart.merchantId || 'this store';
+      const merchantId = cart.merchantId || '';
+      // Empty state — no items yet
+      if (items.length === 0) {
+        const browseArgs = merchantId
+          ? JSON.stringify({merchantId}).replace(/"/g,'&quot;')
+          : '{}';
+        root.innerHTML = '<div class="nx-card" style="text-align:center;padding:48px 24px;">' +
+          '<div style="font-size:36px;margin-bottom:14px;">🛍️</div>' +
+          '<h3 class="nx-title" style="margin-bottom:6px;">Your cart is empty</h3>' +
+          '<p class="nx-meta" style="margin-bottom:18px;">Add a product from any store to start a cart.</p>' +
+          (merchantId
+            ? '<button class="nx-btn nx-btn-secondary" data-call-tool="list_categories" data-args="' + browseArgs + '" data-prompt="Show me categories at ' + escapeHtml(merchantName) + '" style="width:auto;display:inline-flex;">Keep browsing</button>'
+            : '<button class="nx-btn nx-btn-secondary" data-call-tool="list_merchants" data-args="{}" data-prompt="What stores are available?" style="width:auto;display:inline-flex;">See stores</button>'
+          ) +
+        '</div>';
+        return;
+      }
+      // Just-added confirmation banner
+      const just = data.justAdded;
+      const justBanner = just
+        ? '<div style="background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46;padding:10px 12px;border-radius:8px;font-size:12px;margin-bottom:14px;">✓ Added ' + escapeHtml(String(just.quantity || 1)) + ' × ' + escapeHtml(just.title || '') + '</div>'
+        : '';
+      // Items
+      const itemHtml = items.map(it => \`
+        <div class="nx-row">
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:500;color:#0F172A;">\${escapeHtml(it.title)}</div>
+            <div class="nx-meta">Qty \${it.quantity} · SKU \${escapeHtml(it.sku || '')}</div>
+          </div>
+          <div class="nx-amount">\${fmt((it.priceCents || 0) * (it.quantity || 1))}</div>
+        </div>\`).join('');
+      const checkoutPrompt = escapeHtml('Use checkout_cart to convert my cart into a secure browser checkout link');
+      const browseArgs = merchantId
+        ? JSON.stringify({merchantId}).replace(/"/g,'&quot;')
+        : '{}';
+      const keepBrowsingPrompt = escapeHtml('Show me categories at ' + merchantName);
+      root.innerHTML = '<div class="nx-card">' +
+        '<p class="nx-eyebrow">Your cart</p>' +
+        '<h3 class="nx-title">' + escapeHtml(merchantName) + ' · ' + itemCount + ' ' + (itemCount === 1 ? 'item' : 'items') + '</h3>' +
+        justBanner +
+        '<div>' + itemHtml + '</div>' +
+        '<div class="nx-grand" style="margin-top:14px;"><span class="nx-grand-label">Subtotal</span><span class="nx-grand-amount">' + fmt(subtotalCents) + '</span></div>' +
+        '<div style="font-size:11px;color:#64748B;margin-top:4px;">Shipping & tax calculated at checkout.</div>' +
+        '<div class="nx-actions" style="margin-top:18px;">' +
+          '<button class="nx-btn nx-btn-primary" data-call-tool="checkout_cart" data-args="{}" data-prompt="' + checkoutPrompt + '">' +
+            '<span>↗ Checkout · ' + fmt(subtotalCents) + '</span>' +
+            '<span class="nx-btn-meta">secure link</span>' +
+          '</button>' +
+          (merchantId
+            ? '<button class="nx-btn nx-btn-secondary" data-call-tool="list_categories" data-args="' + browseArgs + '" data-prompt="' + keepBrowsingPrompt + '">Keep browsing</button>'
+            : '') +
+        '</div>' +
       '</div>';
     `,
   },

@@ -12,6 +12,9 @@ import { createCheckoutTool } from './create-checkout.js';
 import { completeCheckoutTool } from './complete-checkout.js';
 import { createHandoffTool } from './create-handoff.js';
 import { getOrderStatusTool } from './get-order-status.js';
+import { addToCartTool } from './add-to-cart.js';
+import { viewCartTool } from './view-cart.js';
+import { checkoutCartTool } from './checkout-cart.js';
 
 export const tools = [
   listMerchantsTool,
@@ -22,6 +25,9 @@ export const tools = [
   completeCheckoutTool,
   createHandoffTool,
   getOrderStatusTool,
+  addToCartTool,
+  viewCartTool,
+  checkoutCartTool,
 ];
 
 export type Tool = (typeof tools)[number];

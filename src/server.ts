@@ -48,17 +48,20 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 interface SessionContext {
   jwt?: string;
   fallbackApiKey?: string;
+  sessionId?: string;
 }
 
-function getSessionContext(req: CallToolRequest): SessionContext {
+function getSessionContext(req: CallToolRequest, sessionId?: string): SessionContext {
   // OpenAI Apps platform passes the user's JWT via _meta.bearer_token (subject
   // to change). The fallback ISV API key is read from env so unauthenticated
-  // browse/search calls still work.
+  // browse/search calls still work. sessionId is the MCP SSE session ID
+  // for this connection — used to key the per-conversation cart.
   const meta = (req.params._meta ?? {}) as Record<string, unknown>;
   const jwt = typeof meta['bearer_token'] === 'string' ? (meta['bearer_token'] as string) : undefined;
   return {
     jwt,
     fallbackApiKey: process.env['NEXUS_FALLBACK_API_KEY'] ?? undefined,
+    sessionId,
   };
 }
 
@@ -115,6 +118,10 @@ function renderUI(outputUI: string, result: unknown): string | null {
           trackingNumber: r.order?.trackingNumber,
           trackingUrl: r.order?.trackingUrl,
         });
+      case 'CartView':
+        // Cart UI is iframe-only; non-iframe MCP hosts get the structured JSON
+        // text content as fallback. Returning null lets the host render that.
+        return null;
       default:
         return null;
     }
@@ -124,7 +131,7 @@ function renderUI(outputUI: string, result: unknown): string | null {
 }
 
 /** Build the MCP server with tool handlers. Same instance can drive any transport. */
-function buildServer(): Server {
+function buildServer(opts: { sessionId?: string } = {}): Server {
   const server = new Server(
     { name: 'agentix-nexus', version: '0.1.0' },
     { capabilities: { tools: {}, resources: {}, prompts: {} } },
@@ -185,7 +192,7 @@ function buildServer(): Server {
         isError: true,
       };
     }
-    const ctx = getSessionContext(req);
+    const ctx = getSessionContext(req, opts.sessionId);
     try {
       const parsed = tool.inputSchema.parse(req.params.arguments ?? {});
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -366,7 +373,10 @@ a:hover{text-decoration:underline}
     transports.set(transport.sessionId, transport);
     res.on('close', () => transports.delete(transport.sessionId));
 
-    const server = buildServer();
+    // Per-session server so the sessionId can be threaded into tool ctx —
+    // needed for the cart store, which is keyed on this conversation's
+    // stable SSE sessionId.
+    const server = buildServer({ sessionId: transport.sessionId });
     await server.connect(transport);
     process.stderr.write(`[agentix-nexus] SSE session opened: ${transport.sessionId}\n`);
   });

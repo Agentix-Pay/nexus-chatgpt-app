@@ -42,18 +42,30 @@ export const searchProductsTool = {
       ...(input.maxPriceCents !== undefined && { maxPrice: String(input.maxPriceCents) }),
       ...(input.category && { category: input.category }),
     });
-    const result = await nexus.get<{ data: Product[]; pagination: unknown }>(
-      `/acp/v1/products?${params.toString()}`,
-      { jwt: ctx.jwt, fallbackApiKey: ctx.fallbackApiKey },
-    );
-    if (!result.ok) {
-      return { error: { code: result.code, message: result.message } };
+    // Fetch products + the merchant's display name in parallel — the cart
+    // widget needs merchantName for friendly display when an add_to_cart
+    // fires from a product tile in this grid.
+    const [productsRes, merchantsRes] = await Promise.all([
+      nexus.get<{ data: Product[]; pagination: unknown }>(
+        `/acp/v1/products?${params.toString()}`,
+        { jwt: ctx.jwt, fallbackApiKey: ctx.fallbackApiKey },
+      ),
+      nexus.get<{ data: Array<{ id: string; displayName: string }> }>(
+        '/acp/v1/merchants',
+        { jwt: ctx.jwt, fallbackApiKey: ctx.fallbackApiKey },
+      ),
+    ]);
+    if (!productsRes.ok) {
+      return { error: { code: productsRes.code, message: productsRes.message } };
     }
+    const merchantName = merchantsRes.ok
+      ? merchantsRes.data.data.find((m) => m.id === input.merchantId)?.displayName
+      : undefined;
     // Inline the first image of each product as a data URL. The iframe was
     // rejecting all HTTP image loads regardless of CSP/proxy; data URLs need
     // no network call and render in any sandbox.
     const products = await Promise.all(
-      result.data.data.map(async (p) => {
+      productsRes.data.data.map(async (p) => {
         const first = p.images?.[0];
         if (!first) return p;
         const inlined = await inlineImages([first]);
@@ -62,6 +74,7 @@ export const searchProductsTool = {
     );
     return {
       merchantId: input.merchantId,
+      ...(merchantName ? { merchantName } : {}),
       products,
       ...(input.category ? { category: input.category } : {}),
       ...(input.q ? { q: input.q } : {}),
