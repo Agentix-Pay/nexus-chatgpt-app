@@ -8,21 +8,22 @@ import { listMerchantsTool } from './list-merchants.js';
 import { listCategoriesTool } from './list-categories.js';
 import { searchProductsTool } from './search-products.js';
 import { getProductTool } from './get-product.js';
-import { createCheckoutTool } from './create-checkout.js';
-import { completeCheckoutTool } from './complete-checkout.js';
 import { createHandoffTool } from './create-handoff.js';
 import { getOrderStatusTool } from './get-order-status.js';
 import { addToCartTool } from './add-to-cart.js';
 import { viewCartTool } from './view-cart.js';
 import { checkoutCartTool } from './checkout-cart.js';
 
+// create_checkout + complete_checkout removed from registry. The in-chat
+// (Walmart-style) flow remains in source for future re-enable, but unlisted
+// means GPT can't accidentally route "add to cart" or "checkout" intents to
+// the disabled OrderSummary path. Cart flow is now: add_to_cart → view_cart
+// → checkout_cart, which produces a secure-link CheckoutLinkCard.
 export const tools = [
   listMerchantsTool,
   listCategoriesTool,
   searchProductsTool,
   getProductTool,
-  createCheckoutTool,
-  completeCheckoutTool,
   createHandoffTool,
   getOrderStatusTool,
   addToCartTool,
