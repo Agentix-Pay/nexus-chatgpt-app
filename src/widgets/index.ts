@@ -503,16 +503,20 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           const addPrompt = escapeHtml('Add 1 ' + ptitle + ' to my cart');
           const buyPrompt = escapeHtml('Generate a secure browser checkout link for 1 ' + ptitle);
           // Use a real <img> with onerror — CSP blocks and 404s now hide the
-          // img cleanly, exposing the gradient placeholder on the parent div.
-          // background-image alone wasn't enough: when the URL fails, the
-          // browser leaves the broken-image state in place silently.
+          // img cleanly, exposing the placeholder layer underneath.
           const imgTag = imgUrl
             ? '<img src="' + escapeHtml(imgUrl) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">'
             : '';
+          // Inline placeholder — emoji + bright gradient on the div directly,
+          // so even if the .nx-prod-img class CSS gets overridden / not loaded,
+          // the user still sees an intentional-looking image area instead of
+          // a pure-white box.
+          const imgWrapStyle = 'position:relative;aspect-ratio:1;background:linear-gradient(135deg,#BAE6FD,#DDD6FE);overflow:hidden;display:flex;align-items:center;justify-content:center;';
+          const placeholder = '<span style="font-size:42px;opacity:0.35;line-height:1;pointer-events:none;">🎁</span>';
           return \`
             <div class="nx-prod" role="button" tabindex="0"
                  data-call-tool="get_product" data-args="\${args}" data-prompt="\${prompt}">
-              <div class="nx-prod-img" style="position:relative;">\${imgTag}</div>
+              <div class="nx-prod-img" style="\${imgWrapStyle}">\${placeholder}\${imgTag}</div>
               <div class="nx-prod-body">
                 <p class="nx-prod-title">\${escapeHtml(ptitle)}</p>
                 <div class="nx-prod-price">\${fmt(p.priceCents)}</div>
@@ -632,10 +636,12 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         const clickAttrs = merchantId
           ? 'role="button" tabindex="0" data-call-tool="get_product" data-args="' + args + '" data-prompt="' + prompt + '"'
           : 'data-prompt-only="1" data-prompt="' + prompt + '" role="button" tabindex="0"';
-        // Real <img> with onerror — see merchant-list note above for why.
+        // Real <img> with onerror + inline placeholder — see merchant-list note for why.
         const imgTag = imgUrl
           ? '<img src="' + escapeHtml(imgUrl) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">'
           : '';
+        const imgWrapStyle = 'position:relative;aspect-ratio:1;background:linear-gradient(135deg,#BAE6FD,#DDD6FE);overflow:hidden;display:flex;align-items:center;justify-content:center;';
+        const placeholder = '<span style="font-size:42px;opacity:0.35;line-height:1;pointer-events:none;">🎁</span>';
         // 3-button action row — only when we have a merchantId (needed for handoff)
         const handoffArgs = merchantId
           ? JSON.stringify({merchantId, items:[{productId:pid, quantity:1}]}).replace(/"/g,'&quot;')
@@ -654,7 +660,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         ) : '';
         return \`
           <div class="nx-prod" \${clickAttrs}>
-            <div class="nx-prod-img" style="position:relative;">\${imgTag}</div>
+            <div class="nx-prod-img" style="\${imgWrapStyle}">\${placeholder}\${imgTag}</div>
             <div class="nx-prod-body">
               <p class="nx-prod-title">\${escapeHtml(ptitle)}</p>
               <div class="nx-prod-price">\${fmt(p.priceCents)}</div>
@@ -782,7 +788,9 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           ? '<p class="nx-eyebrow" style="margin:14px 0 8px;">Checkout options</p>'
           : '<p class="nx-eyebrow" style="margin:14px 0 8px;">Checkout</p>';
       root.innerHTML = '<div class="nx-card">' +
-        '<div style="position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;margin-bottom:14px;overflow:hidden;background:linear-gradient(135deg,#BAE6FD,#DDD6FE);">' + heroImg + '</div>' +
+        '<div style="position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;margin-bottom:14px;overflow:hidden;background:linear-gradient(135deg,#BAE6FD,#DDD6FE);display:flex;align-items:center;justify-content:center;">' +
+          '<span style="font-size:56px;opacity:0.35;line-height:1;pointer-events:none;">🎁</span>' + heroImg +
+        '</div>' +
         '<h3 class="nx-title">' + escapeHtml(p.title) + '</h3>' +
         '<p class="nx-tile-meta" style="margin-bottom:10px;">SKU ' + escapeHtml(p.sku || '') + (m.displayName ? ' · ' + escMerch : '') + '</p>' +
         (p.description ? '<p style="font-size:13px;color:#475569;margin:0 0 14px;line-height:1.55;">' + escapeHtml(p.description) + '</p>' : '') +
