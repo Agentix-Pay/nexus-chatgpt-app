@@ -38,7 +38,7 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 3;
+const WIDGET_VERSION = 4;
 
 /** Map a tool's outputUI value to its widget URI. */
 export function widgetUri(outputUI: string): string {
@@ -651,8 +651,11 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         const imgTag = imgUrl
           ? '<img src="' + escapeHtml(imgUrl) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">'
           : '';
-        const imgWrapStyle = 'position:relative;aspect-ratio:1;background:linear-gradient(135deg,#BAE6FD,#DDD6FE);overflow:hidden;display:flex;align-items:center;justify-content:center;';
-        const placeholder = '<span style="font-size:42px;opacity:0.35;line-height:1;pointer-events:none;">🎁</span>';
+        // Fixed pixel height + solid background — maximally compatible across
+        // browser engines and any aggressive HTML sanitization. aspect-ratio
+        // is fairly new CSS and may not survive every iframe sandbox.
+        const imgWrapStyle = 'position:relative;height:180px;width:100%;background-color:#DBEAFE;overflow:hidden;display:flex;align-items:center;justify-content:center;border-radius:8px;';
+        const placeholder = '<span style="font-size:48px;line-height:1;pointer-events:none;color:#6366F1;">🎁</span>';
         // 3-button action row — only when we have a merchantId (needed for handoff)
         const handoffArgs = merchantId
           ? JSON.stringify({merchantId, items:[{productId:pid, quantity:1}]}).replace(/"/g,'&quot;')
@@ -799,8 +802,8 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           ? '<p class="nx-eyebrow" style="margin:14px 0 8px;">Checkout options</p>'
           : '<p class="nx-eyebrow" style="margin:14px 0 8px;">Checkout</p>';
       root.innerHTML = '<div class="nx-card">' +
-        '<div style="position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;margin-bottom:14px;overflow:hidden;background:linear-gradient(135deg,#BAE6FD,#DDD6FE);display:flex;align-items:center;justify-content:center;">' +
-          '<span style="font-size:56px;opacity:0.35;line-height:1;pointer-events:none;">🎁</span>' + heroImg +
+        '<div style="position:relative;width:100%;height:240px;border-radius:10px;margin-bottom:14px;overflow:hidden;background-color:#DBEAFE;display:flex;align-items:center;justify-content:center;">' +
+          '<span style="font-size:64px;line-height:1;pointer-events:none;color:#6366F1;">🎁</span>' + heroImg +
         '</div>' +
         '<h3 class="nx-title">' + escapeHtml(p.title) + '</h3>' +
         '<p class="nx-tile-meta" style="margin-bottom:10px;">SKU ' + escapeHtml(p.sku || '') + (m.displayName ? ' · ' + escMerch : '') + '</p>' +
