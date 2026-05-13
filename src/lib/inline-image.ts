@@ -13,7 +13,10 @@
  */
 
 const cache = new Map<string, { data: string; expires: number }>();
-const TTL_MS = 60 * 60_000; // 1h in-memory cache
+// 24h TTL: long enough that even a quiet day between demo runs never lets
+// cache entries expire while the container is still warm. Combined with the
+// 30-min recurring re-warm in server.ts, cache effectively never goes cold.
+const TTL_MS = 24 * 60 * 60_000;
 
 const ALLOW = [
   /^https:\/\/loremflickr\.com\//,

@@ -38,7 +38,7 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 9;
+const WIDGET_VERSION = 10;
 
 /** Map a tool's outputUI value to its widget URI. */
 export function widgetUri(outputUI: string): string {
@@ -286,9 +286,17 @@ function __onActivate(e){
   let args={};
   try{args=JSON.parse(t.getAttribute('data-args')||'{}');}catch(err){}
   callTool(tool||null,args,promptText);
-  // Visual feedback so user knows click registered
-  t.style.opacity='0.6';
-  setTimeout(()=>{t.style.opacity='';},250);
+  // Replace the widget content with a polished loading state immediately so
+  // the demo person gets instant visual confirmation. The tool call takes
+  // 2-5s (mostly ChatGPT GPT inference); leaving the previous widget visible
+  // makes that wait feel broken. This loading card stays until the new tool
+  // result lands and re-renders root via safeRender().
+  root.innerHTML = '<div class="nx-card" style="text-align:center;padding:48px 24px;">' +
+    '<div style="width:32px;height:32px;border-radius:50%;border:3px solid #E2E8F0;border-top-color:#818CF8;animation:spin 0.8s linear infinite;margin:0 auto 14px;"></div>' +
+    '<div style="font-size:14px;font-weight:600;color:#0F172A;margin-bottom:4px;">Loading…</div>' +
+    '<div style="font-size:12px;color:#64748B;">One moment</div>' +
+    '<style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>' +
+  '</div>';
 }
 // Trigger OpenAI's native checkout sheet. Prototype — gracefully shows what
 // happened (sheet opened / not enabled / errored) so we know whether

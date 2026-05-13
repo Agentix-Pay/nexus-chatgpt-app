@@ -394,6 +394,11 @@ a:hover{text-decoration:underline}
     // request handling. By the time a shopper opens a category, every
     // mock-catalog image is already a base64-cached blob in memory.
     void prewarmImageCache();
+    // Recurring re-warm every 30 minutes. Belt-and-suspenders to the 24h
+    // cache TTL: even if no shopper traffic arrives between demo runs,
+    // the cache stays continuously fresh. Critical for letting someone
+    // else demo the App without us being able to pre-prime it for them.
+    setInterval(() => { void prewarmImageCache(); }, 30 * 60_000).unref();
   });
 }
 
