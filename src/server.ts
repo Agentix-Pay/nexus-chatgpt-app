@@ -283,6 +283,64 @@ a:hover{text-decoration:underline}
     });
   });
 
+  // ── Image proxy ──────────────────────────────────────────────────────────
+  // Product/category image URLs from MockAdapter (loremflickr.com), Shopify
+  // CDN, etc. were failing to load inside the ChatGPT iframe sandbox even
+  // with the host in resourceDomains — most likely a combination of CSP
+  // strictness, 302-redirect-with-cookies handling (loremflickr's flow),
+  // and sandbox restrictions. Proxying images through the App's own origin
+  // sidesteps all of that: the iframe is served from this same host, so
+  // image requests are effectively same-origin and the CSP allowlist is
+  // moot. Server-side fetch handles redirects + drops session cookies the
+  // browser couldn't carry through.
+  const IMG_PROXY_ALLOWLIST = [
+    /^https:\/\/loremflickr\.com\//,
+    /^https:\/\/[^/]+\.flickr\.com\//,
+    /^https:\/\/cdn\.shopify\.com\//,
+    /^https:\/\/[^/]+\.shopifycdn\.com\//,
+    /^https:\/\/i[0-9]\.wp\.com\//,
+    /^https:\/\/[^/]+\.bigcommerce\.com\//,
+    /^https:\/\/res\.cloudinary\.com\//,
+    /^https:\/\/ik\.imagekit\.io\//,
+    /^https:\/\/imagedelivery\.net\//,
+    /^https:\/\/images\.squarespace-cdn\.com\//,
+    /^https:\/\/[^/]+\.cloudfront\.net\//,
+    /^https:\/\/[^/]+\.s3\.amazonaws\.com\//,
+    /^https:\/\/s3\.amazonaws\.com\//,
+    /^https:\/\/images\.unsplash\.com\//,
+  ];
+  app.get('/img-proxy', async (req, res) => {
+    const url = typeof req.query['url'] === 'string' ? req.query['url'] : '';
+    if (!url) {
+      res.status(400).json({ error: 'missing url query param' });
+      return;
+    }
+    if (!IMG_PROXY_ALLOWLIST.some((re) => re.test(url))) {
+      res.status(403).json({ error: 'host not in allowlist' });
+      return;
+    }
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10_000);
+      const upstream = await fetch(url, { redirect: 'follow', signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!upstream.ok) {
+        res.status(upstream.status).json({ error: 'upstream returned ' + upstream.status });
+        return;
+      }
+      const contentType = upstream.headers.get('content-type') ?? 'image/jpeg';
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      res
+        .setHeader('Content-Type', contentType)
+        .setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400')
+        .setHeader('Access-Control-Allow-Origin', '*')
+        .send(buf);
+    } catch (err) {
+      const e = err as { name?: string; message?: string };
+      res.status(502).json({ error: e.name === 'AbortError' ? 'upstream timeout' : (e.message ?? 'proxy error') });
+    }
+  });
+
   // ── OAuth discovery: DISABLED for anonymous-by-default mode ───────────
   // The App used to advertise OAuth via these well-known endpoints, prompting
   // ChatGPT to show a sign-in screen at install time. We now serve 404 here

@@ -38,7 +38,7 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 5;
+const WIDGET_VERSION = 6;
 
 /** Map a tool's outputUI value to its widget URI. */
 export function widgetUri(outputUI: string): string {
@@ -206,11 +206,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",syste
  * Desktop, MCP Inspector). On the first 1.5s with no data, we show debug info
  * so we can diagnose live.
  */
+// Image proxy origin — every product/category image URL is routed through
+// here so the iframe doesn't directly hit upstream image CDNs. Same-origin
+// to the widget's serving host, which sidesteps CSP + sandbox quirks that
+// were blocking direct loremflickr/Shopify-CDN loads.
+const IMG_PROXY_ORIGIN = 'https://agentix-nexus-app.fly.dev';
+
 const POSTMSG_LISTENER = `
 const root = document.getElementById('root');
 let __rendered = false;
 let __lastData = null;
 let __currency = 'USD';
+const IMG_PROXY = '${IMG_PROXY_ORIGIN}/img-proxy?url=';
+// Wrap an external image URL with the proxy. If it's already same-origin or
+// missing, pass through unchanged.
+function proxyImg(u){
+  if(!u||typeof u!=='string')return '';
+  if(u.startsWith('data:')||u.startsWith('blob:'))return u;
+  if(!u.startsWith('http'))return u;
+  return IMG_PROXY + encodeURIComponent(u);
+}
 // Tracks the current merchant's currency so price formatting respects it. Set
 // from data.currency / data.merchant.currency / data.checkout.currency on each
 // render. Falls back to USD if nothing arrives — safe for the mock and any
@@ -471,7 +486,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           const args = JSON.stringify(argsObj).replace(/"/g,'&quot;');
           const prompt = escapeHtml('Show me ' + (c.name || '') + ' products');
           const bg = c.sampleImage
-            ? "background-image:url('" + c.sampleImage + "'), linear-gradient(135deg,#BAE6FD,#DDD6FE);"
+            ? "background-image:url('" + proxyImg(c.sampleImage) + "'), linear-gradient(135deg,#BAE6FD,#DDD6FE);"
             : '';
           return \`
             <div class="nx-cat" role="button" tabindex="0"
@@ -516,7 +531,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           // Use a real <img> with onerror — CSP blocks and 404s now hide the
           // img cleanly, exposing the placeholder layer underneath.
           const imgTag = imgUrl
-            ? '<img src="' + escapeHtml(imgUrl) + '" alt="" loading="lazy" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">'
+            ? '<img src="' + escapeHtml(proxyImg(imgUrl)) + '" alt="" loading="lazy" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">'
             : '';
           // Inline placeholder — emoji + bright gradient on the div directly,
           // so even if the .nx-prod-img class CSS gets overridden / not loaded,
@@ -590,7 +605,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         const args = JSON.stringify(argsObj).replace(/"/g,'&quot;');
         const prompt = escapeHtml('Show me ' + (c.name || '') + ' products');
         const bg = c.sampleImage
-          ? "background-image:url('" + c.sampleImage + "'), linear-gradient(135deg,#BAE6FD,#DDD6FE);"
+          ? "background-image:url('" + proxyImg(c.sampleImage) + "'), linear-gradient(135deg,#BAE6FD,#DDD6FE);"
           : '';
         return \`
           <div class="nx-cat" role="button" tabindex="0"
@@ -649,7 +664,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           : 'data-prompt-only="1" data-prompt="' + prompt + '" role="button" tabindex="0"';
         // Real <img> with onerror + inline placeholder — see merchant-list note for why.
         const imgTag = imgUrl
-          ? '<img src="' + escapeHtml(imgUrl) + '" alt="" loading="lazy" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">'
+          ? '<img src="' + escapeHtml(proxyImg(imgUrl)) + '" alt="" loading="lazy" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">'
           : '';
         // Fixed pixel height + solid background — maximally compatible across
         // browser engines and any aggressive HTML sanitization. aspect-ratio
@@ -730,7 +745,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
       // Hero image — real <img> with onerror so CSP blocks / 404s reveal the
       // gradient placeholder underneath instead of leaving a pure-white area.
       const heroImg = p.images && p.images[0]
-        ? '<img src="' + escapeHtml(p.images[0]) + '" alt="" loading="lazy" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">'
+        ? '<img src="' + escapeHtml(proxyImg(p.images[0])) + '" alt="" loading="lazy" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">'
         : '';
       const itemArgs = JSON.stringify({merchantId,items:[{productId:p.id,quantity:1}]}).replace(/"/g,'&quot;');
       const escTitle = escapeHtml(p.title || 'this item');
