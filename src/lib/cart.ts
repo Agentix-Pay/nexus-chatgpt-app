@@ -1,19 +1,28 @@
 /**
- * In-memory per-session cart store.
+ * In-memory cart store (process-wide singleton for demo simplicity).
  *
- * Each ChatGPT conversation establishes an MCP SSE connection with a stable
- * sessionId for the duration. We key the cart on that sessionId — every tool
- * call from the same conversation lands on the same cart. Cart is lost when
- * the connection closes (e.g. user starts a new chat), which is the correct
- * UX semantic — a new conversation is a new shopping session.
+ * Original design keyed carts by MCP SSE sessionId. Turned out ChatGPT can
+ * open a new SSE connection per tool call in some configurations, breaking
+ * cart continuity — successive add_to_cart calls landed on different
+ * sessionIds and each created a fresh cart. For a demo with one shopper at
+ * a time, the simplest reliable fix is a single shared cart.
+ *
+ * Trade-offs accepted:
+ * - One cart per App process. Concurrent shoppers share state. Fine for the
+ *   demo (one user) and fine in practice until we wire real user identity
+ *   from OAuth — then we'd swap this for a Nexus-backed per-user cart.
+ * - Cart persists until the App container restarts (rare with
+ *   min_machines_running=1 + auto_stop_machines=false) or someone calls
+ *   clearCart (checkout_cart does this on success).
  *
  * Carts are pinned to a single merchant. Calling add_to_cart for a different
  * merchant returns an error rather than silently mixing items — Nexus's
  * /acp/v1/handoff is a per-merchant operation and mixing would fail downstream.
  *
- * Future migration: when Nexus grows a real Cart model with persistence, swap
- * this implementation for a Nexus-backed one — the tool surface (add/view/
- * checkout) stays identical.
+ * Future migration: when Nexus grows a real Cart model with persistence and
+ * user identity is wired through OAuth, swap this implementation for a
+ * per-user Nexus-backed one — the tool surface (add/view/checkout) stays
+ * identical.
  */
 
 export interface CartItem {
@@ -33,7 +42,9 @@ export interface Cart {
   updatedAt: number;
 }
 
-const carts = new Map<string, Cart>();
+// Process-wide single cart. sessionId arg kept on the public API for future
+// per-user scoping, but currently ignored — all calls land here.
+let sharedCart: Cart | null = null;
 
 function totalCents(cart: Cart): number {
   return cart.items.reduce((sum, it) => sum + it.priceCents * it.quantity, 0);
@@ -43,12 +54,12 @@ function totalCount(cart: Cart): number {
   return cart.items.reduce((sum, it) => sum + it.quantity, 0);
 }
 
-export function getCart(sessionId: string): Cart | null {
-  return carts.get(sessionId) ?? null;
+export function getCart(_sessionId: string): Cart | null {
+  return sharedCart;
 }
 
-export function clearCart(sessionId: string): void {
-  carts.delete(sessionId);
+export function clearCart(_sessionId: string): void {
+  sharedCart = null;
 }
 
 export type AddResult =
@@ -56,54 +67,50 @@ export type AddResult =
   | { ok: false; error: { code: string; message: string } };
 
 export function addToCart(
-  sessionId: string,
+  _sessionId: string,
   item: CartItem,
   merchantId: string,
   merchantName?: string,
 ): AddResult {
-  if (!sessionId) {
-    return { ok: false, error: { code: 'NO_SESSION', message: 'No session context — cannot track cart' } };
-  }
   if (!merchantId) {
     return { ok: false, error: { code: 'NO_MERCHANT', message: 'Cannot add item without merchantId' } };
   }
 
-  const existing = carts.get(sessionId);
-  if (existing && existing.merchantId !== merchantId) {
+  if (sharedCart && sharedCart.merchantId !== merchantId) {
     return {
       ok: false,
       error: {
         code: 'MERCHANT_MISMATCH',
-        message: `Cart already has items from ${existing.merchantName ?? existing.merchantId}. Clear cart before adding from a different store.`,
+        message: `Cart already has items from ${sharedCart.merchantName ?? sharedCart.merchantId}. Clear cart before adding from a different store.`,
       },
     };
   }
 
-  const cart: Cart = existing ?? { merchantId, merchantName, items: [], updatedAt: Date.now() };
-  if (merchantName && !cart.merchantName) cart.merchantName = merchantName;
+  if (!sharedCart) {
+    sharedCart = { merchantId, merchantName, items: [], updatedAt: Date.now() };
+  }
+  if (merchantName && !sharedCart.merchantName) sharedCart.merchantName = merchantName;
 
   // Merge same-product additions by incrementing quantity.
-  const existingItem = cart.items.find((it) => it.productId === item.productId);
+  const existingItem = sharedCart.items.find((it) => it.productId === item.productId);
   if (existingItem) {
     existingItem.quantity += item.quantity;
   } else {
-    cart.items.push({ ...item });
+    sharedCart.items.push({ ...item });
   }
-  cart.updatedAt = Date.now();
-  carts.set(sessionId, cart);
-  return { ok: true, cart, itemCount: totalCount(cart), subtotalCents: totalCents(cart) };
+  sharedCart.updatedAt = Date.now();
+  return { ok: true, cart: sharedCart, itemCount: totalCount(sharedCart), subtotalCents: totalCents(sharedCart) };
 }
 
-export function cartSummary(sessionId: string) {
-  const cart = carts.get(sessionId);
-  if (!cart) {
+export function cartSummary(_sessionId: string) {
+  if (!sharedCart) {
     return { merchantId: null, merchantName: null, items: [], itemCount: 0, subtotalCents: 0 };
   }
   return {
-    merchantId: cart.merchantId,
-    merchantName: cart.merchantName ?? null,
-    items: cart.items,
-    itemCount: totalCount(cart),
-    subtotalCents: totalCents(cart),
+    merchantId: sharedCart.merchantId,
+    merchantName: sharedCart.merchantName ?? null,
+    items: sharedCart.items,
+    itemCount: totalCount(sharedCart),
+    subtotalCents: totalCents(sharedCart),
   };
 }
