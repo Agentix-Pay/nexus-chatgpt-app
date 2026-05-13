@@ -715,9 +715,12 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           </div>
           <div class="nx-amount">\${fmt(it.lineTotalCents)}</div>
         </div>\`).join('');
-      const completeArgs = JSON.stringify({checkoutId, paymentMethod:'demo'}).replace(/"/g,'&quot;');
-      const completePrompt = escapeHtml('Use complete_checkout with checkoutId=' + checkoutId + ' to charge the demo card and confirm this order');
       const escMerch = escapeHtml(merchantName);
+      // Demo scope: in-chat checkout is disabled. If the GPT routes the user
+      // here anyway (e.g. they typed "buy this"), payment buttons are rendered
+      // as disabled stubs so the path can't complete. The shopper is directed
+      // back to "Open secure link" on the product card.
+      const disabledStyle = 'opacity:0.45;cursor:not-allowed;filter:grayscale(0.25);';
       root.innerHTML = '<div class="nx-card"><p class="nx-eyebrow">Order summary</p>' +
         '<h3 class="nx-title">' + escMerch + '</h3>' +
         '<div>' + itemHtml + '</div>' +
@@ -727,14 +730,15 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           '<div class="nx-totals-row"><span>Tax</span><span class="nx-amount">' + fmt(c.taxCents) + '</span></div>' +
           '<div class="nx-grand"><span class="nx-grand-label">Total</span><span class="nx-grand-amount">' + fmt(totalCents) + '</span></div>' +
         '</div>' +
-        '<div class="nx-actions" style="margin-top:18px;">' +
-          '<button class="nx-btn nx-btn-primary nx-btn-chatgpt-pay" data-action="chatgpt-pay">' +
+        '<div class="nx-banner" style="margin-top:14px;">In-chat checkout is coming soon. Open the product card and tap <strong>↗ Open secure link</strong> to complete payment in the browser.</div>' +
+        '<div class="nx-actions" style="margin-top:14px;">' +
+          '<button class="nx-btn nx-btn-secondary" disabled aria-disabled="true" style="' + disabledStyle + '">' +
             '<span>⚡ Pay with ChatGPT</span>' +
-            '<span class="nx-btn-meta">native · 1 tap</span>' +
+            '<span class="nx-btn-meta">Coming soon</span>' +
           '</button>' +
-          '<button class="nx-btn nx-btn-secondary" data-call-tool="complete_checkout" data-args="' + completeArgs + '" data-prompt="' + completePrompt + '">' +
+          '<button class="nx-btn nx-btn-secondary" disabled aria-disabled="true" style="' + disabledStyle + '">' +
             '<span>🔒 Confirm &amp; Pay ' + fmt(totalCents) + '</span>' +
-            '<span class="nx-btn-meta">demo card</span>' +
+            '<span class="nx-btn-meta">Coming soon</span>' +
           '</button>' +
         '</div>' +
       '</div>';

@@ -18,7 +18,7 @@ const inputSchema = z.object({
 export const createCheckoutTool = {
   name: 'create_checkout',
   description:
-    'Start an in-chat checkout (Walmart-style — Flow A). Use ONLY when the merchant.checkoutMode is IN_APP, or when the shopper explicitly asks to complete the purchase in chat with their card on file. Do NOT use when the shopper clicks an "Open secure link" button or asks for a browser checkout link, "secure link", "checkout link", or "checkout URL" — use create_handoff for those. Pair with complete_checkout to finalize the in-chat charge.',
+    'DISABLED FOR DEMO — DO NOT CALL. In-chat checkout (Walmart-style — Flow A) is gated off for the current demo build. For any purchase intent ("buy this", "checkout", "complete my order", "I want to pay"), call `create_handoff` instead — it returns a secure browser checkout link, which is the only working payment path right now. If the shopper insists on in-chat payment, tell them it is coming soon and point them at the "↗ Open secure link" action on the product card.',
   inputSchema,
   outputUI: 'OrderSummary',
   annotations: { title: 'Start in-chat checkout', readOnlyHint: false, openWorldHint: false, destructiveHint: false },
