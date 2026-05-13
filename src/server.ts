@@ -15,6 +15,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { prewarmImageCache } from './lib/prewarm.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -388,6 +389,11 @@ a:hover{text-decoration:underline}
         `  MCP SSE:   http://localhost:${port}/mcp/sse\n` +
         `  Tools:     ${tools.length}\n`,
     );
+    // Fire-and-forget pre-warm of the image cache. Errors are swallowed
+    // inside prewarmImageCache() — never blocks startup, never breaks
+    // request handling. By the time a shopper opens a category, every
+    // mock-catalog image is already a base64-cached blob in memory.
+    void prewarmImageCache();
   });
 }
 
