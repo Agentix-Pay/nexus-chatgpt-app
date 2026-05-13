@@ -26,21 +26,28 @@ export const createHandoffTool = {
     input: z.infer<typeof inputSchema>,
     ctx: { jwt?: string; fallbackApiKey?: string },
   ) => {
-    const result = await nexus.post<{
-      checkoutUrl: string;
-      checkoutHost: 'platform' | 'nexus';
-      externalOrderId?: string;
-      expiresAt: string;
-      totalCents: number;
-      currency: string;
-      items: Array<{ sku: string; title: string; quantity: number; lineTotalCents: number }>;
-    }>('/acp/v1/handoff', input, {
-      jwt: ctx.jwt,
-      fallbackApiKey: ctx.fallbackApiKey,
-    });
+    // Fetch handoff + merchant directory in parallel — handoff response doesn't
+    // include merchantName, so we look it up so the CheckoutLinkCard widget can
+    // render "<store name> · $X" instead of the generic "Merchant" fallback.
+    const [result, merchantsRes] = await Promise.all([
+      nexus.post<Record<string, unknown>>('/acp/v1/handoff', input, {
+        jwt: ctx.jwt,
+        fallbackApiKey: ctx.fallbackApiKey,
+      }),
+      nexus.get<{ data: Array<{ id: string; displayName: string }> }>(
+        '/acp/v1/merchants',
+        { jwt: ctx.jwt, fallbackApiKey: ctx.fallbackApiKey },
+      ),
+    ]);
     if (!result.ok) {
       return { error: { code: result.code, message: result.message } };
     }
-    return result.data;
+    const merchantName = merchantsRes.ok
+      ? merchantsRes.data.data.find((m) => m.id === input.merchantId)?.displayName
+      : undefined;
+    return {
+      ...result.data,
+      ...(merchantName ? { merchantName } : {}),
+    };
   },
 };

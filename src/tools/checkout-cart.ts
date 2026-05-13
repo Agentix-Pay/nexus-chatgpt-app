@@ -27,7 +27,7 @@ export const checkoutCartTool = {
         },
       };
     }
-    const result = await nexus.post<unknown>(
+    const result = await nexus.post<Record<string, unknown>>(
       '/acp/v1/handoff',
       {
         merchantId: summary.merchantId,
@@ -42,6 +42,11 @@ export const checkoutCartTool = {
     // Clear the cart on a successful handoff — payment happens in the browser
     // from here, so a fresh cart on the next add-to-cart call is correct.
     clearCart(sessionId);
-    return result.data;
+    // Carry merchantName from the cart into the response so the CheckoutLinkCard
+    // widget renders "<store name> · $X" instead of the generic "Merchant" fallback.
+    return {
+      ...result.data,
+      ...(summary.merchantName ? { merchantName: summary.merchantName } : {}),
+    };
   },
 };
