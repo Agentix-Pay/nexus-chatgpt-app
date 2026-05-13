@@ -60,7 +60,18 @@ export function widgetMeta(): Record<string, unknown> {
       domain: WIDGET_DOMAIN,
       csp: {
         connectDomains: ['https://agentix-nexus.fly.dev'],
-        resourceDomains: ['https://*.oaistatic.com'],
+        // Image-host allowlist for product/category thumbnails. loremflickr.com
+        // is the mock merchant's placeholder source; cdn.shopify.com and Unsplash
+        // cover the common real-merchant CDNs we'll point at when MockAdapter is
+        // swapped for Shopify/Woo. *.oaistatic.com stays for any OpenAI-served
+        // assets the host injects.
+        resourceDomains: [
+          'https://*.oaistatic.com',
+          'https://loremflickr.com',
+          'https://*.loremflickr.com',
+          'https://cdn.shopify.com',
+          'https://images.unsplash.com',
+        ],
       },
     },
   };
