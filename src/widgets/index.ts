@@ -38,7 +38,7 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 8;
+const WIDGET_VERSION = 9;
 
 /** Map a tool's outputUI value to its widget URI. */
 export function widgetUri(outputUI: string): string {
@@ -489,20 +489,17 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           const argsObj = {merchantId, category: c.name, limit: 24};
           const args = JSON.stringify(argsObj).replace(/"/g,'&quot;');
           const prompt = escapeHtml('Show me ' + (c.name || '') + ' products');
-          const bg = c.sampleImage
-            ? "background-image:url('" + proxyImg(c.sampleImage) + "'), linear-gradient(135deg,#BAE6FD,#DDD6FE);"
-            : '';
+          // Text-only category tiles — no images, no emoji. Drops the inline
+          // overhead entirely and keeps the tool payload tiny.
+          const tileStyle = 'background:linear-gradient(135deg,#BAE6FD,#DDD6FE);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:16px;';
           return \`
             <div class="nx-cat" role="button" tabindex="0"
+                 style="\${tileStyle}"
                  data-call-tool="search_products"
                  data-args="\${args}"
                  data-prompt="\${prompt}">
-              <div class="nx-cat-img" style="\${bg}"></div>
-              <div class="nx-cat-overlay"></div>
-              <div class="nx-cat-text">
-                <p class="nx-cat-name">\${safeName}</p>
-                <p class="nx-cat-count">\${c.productCount || 0} \${c.productCount === 1 ? 'item' : 'items'}</p>
-              </div>
+              <p style="font-size:15px;font-weight:600;color:#0F172A;margin:0 0 4px;line-height:1.25;">\${safeName}</p>
+              <p style="font-size:11px;font-weight:500;color:#475569;margin:0;">\${c.productCount || 0} \${c.productCount === 1 ? 'item' : 'items'}</p>
             </div>\`;
         }).join('');
         root.innerHTML = '<div class="nx-card">' +
@@ -608,20 +605,16 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         const argsObj = {merchantId, category: c.name, limit: 24};
         const args = JSON.stringify(argsObj).replace(/"/g,'&quot;');
         const prompt = escapeHtml('Show me ' + (c.name || '') + ' products');
-        const bg = c.sampleImage
-          ? "background-image:url('" + proxyImg(c.sampleImage) + "'), linear-gradient(135deg,#BAE6FD,#DDD6FE);"
-          : '';
+        // Text-only category tiles — see merchant-list note for rationale.
+        const tileStyle = 'background:linear-gradient(135deg,#BAE6FD,#DDD6FE);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:16px;';
         return \`
           <div class="nx-cat" role="button" tabindex="0"
+               style="\${tileStyle}"
                data-call-tool="search_products"
                data-args="\${args}"
                data-prompt="\${prompt}">
-            <div class="nx-cat-img" style="\${bg}"></div>
-            <div class="nx-cat-overlay"></div>
-            <div class="nx-cat-text">
-              <p class="nx-cat-name">\${safeName}</p>
-              <p class="nx-cat-count">\${c.productCount || 0} \${c.productCount === 1 ? 'item' : 'items'}</p>
-            </div>
+            <p style="font-size:15px;font-weight:600;color:#0F172A;margin:0 0 4px;line-height:1.25;">\${safeName}</p>
+            <p style="font-size:11px;font-weight:500;color:#475569;margin:0;">\${c.productCount || 0} \${c.productCount === 1 ? 'item' : 'items'}</p>
           </div>\`;
       }).join('');
       root.innerHTML = '<div class="nx-card">' +

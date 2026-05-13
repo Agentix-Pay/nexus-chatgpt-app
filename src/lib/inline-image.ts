@@ -38,9 +38,13 @@ const ALLOW = [
  * size to ChatGPT. Rewrite known sources to smaller dimensions before fetch.
  */
 function rewriteForSize(url: string): string {
-  // loremflickr: https://loremflickr.com/<w>/<h>/<tags>?lock=N → 300×300
+  // loremflickr: https://loremflickr.com/<w>/<h>/<tags>?lock=N → 200×200.
+  // 300×300 was sharper but the 17KB base64 payload (×10 products) added up
+  // to ~170KB per search_products tool result. 200×200 cuts that in half
+  // (~8KB each, ~80KB total) which noticeably speeds up SSE → ChatGPT parse
+  // → postMessage → iframe render. Still ≥ tile display size on most screens.
   const lf = url.match(/^(https:\/\/loremflickr\.com\/)\d+\/\d+(\/.+)$/);
-  if (lf) return `${lf[1]}300/300${lf[2]}`;
+  if (lf) return `${lf[1]}200/200${lf[2]}`;
   // Shopify CDN supports size suffixes — most product image URLs are like
   // https://cdn.shopify.com/.../image.jpg → image_400x400.jpg
   // We don't blanket-rewrite Shopify because their URLs encode size differently
