@@ -459,7 +459,9 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           const argsObj = {merchantId, category: c.name, limit: 24};
           const args = JSON.stringify(argsObj).replace(/"/g,'&quot;');
           const prompt = escapeHtml('Show me ' + (c.name || '') + ' products');
-          const bg = c.sampleImage ? "background-image:url('" + c.sampleImage + "');" : '';
+          const bg = c.sampleImage
+            ? "background-image:url('" + c.sampleImage + "'), linear-gradient(135deg,#E0F2FE,#EDE9FE);"
+            : '';
           return \`
             <div class="nx-cat" role="button" tabindex="0"
                  data-call-tool="search_products"
@@ -500,7 +502,11 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           const handoffArgs = JSON.stringify({merchantId, items:[{productId:pid, quantity:1}]}).replace(/"/g,'&quot;');
           const addPrompt = escapeHtml('Add 1 ' + ptitle + ' to my cart');
           const buyPrompt = escapeHtml('Generate a secure browser checkout link for 1 ' + ptitle);
-          const bg = imgUrl ? "background-image:url('" + imgUrl + "');" : '';
+          // Stack url(...) on top of the gradient so a CSP block or 404 still
+          // shows the placeholder gradient instead of a pure-white box.
+          const bg = imgUrl
+            ? "background-image:url('" + imgUrl + "'), linear-gradient(135deg,#E0F2FE,#EDE9FE);"
+            : '';
           return \`
             <div class="nx-prod" role="button" tabindex="0"
                  data-call-tool="get_product" data-args="\${args}" data-prompt="\${prompt}">
@@ -566,7 +572,9 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         const argsObj = {merchantId, category: c.name, limit: 24};
         const args = JSON.stringify(argsObj).replace(/"/g,'&quot;');
         const prompt = escapeHtml('Show me ' + (c.name || '') + ' products');
-        const bg = c.sampleImage ? "background-image:url('" + c.sampleImage + "');" : '';
+        const bg = c.sampleImage
+          ? "background-image:url('" + c.sampleImage + "'), linear-gradient(135deg,#E0F2FE,#EDE9FE);"
+          : '';
         return \`
           <div class="nx-cat" role="button" tabindex="0"
                data-call-tool="search_products"
@@ -622,7 +630,9 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         const clickAttrs = merchantId
           ? 'role="button" tabindex="0" data-call-tool="get_product" data-args="' + args + '" data-prompt="' + prompt + '"'
           : 'data-prompt-only="1" data-prompt="' + prompt + '" role="button" tabindex="0"';
-        const bg = imgUrl ? "background-image:url('" + imgUrl + "');" : '';
+        const bg = imgUrl
+          ? "background-image:url('" + imgUrl + "'), linear-gradient(135deg,#E0F2FE,#EDE9FE);"
+          : '';
         // 3-button action row — only when we have a merchantId (needed for handoff)
         const handoffArgs = merchantId
           ? JSON.stringify({merchantId, items:[{productId:pid, quantity:1}]}).replace(/"/g,'&quot;')
@@ -695,7 +705,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
       const merchantId = m.id || '';
       const modes = m.availableModes || ['IN_APP'];
       const imgStyle = p.images && p.images[0]
-        ? 'background-image:url(\\'' + escapeHtml(p.images[0]) + '\\');background-size:cover;background-position:center;'
+        ? 'background-image:url(\\'' + escapeHtml(p.images[0]) + '\\'), linear-gradient(135deg,#E0F2FE,#EDE9FE);background-size:cover;background-position:center;'
         : 'background:linear-gradient(135deg,#E0F2FE,#EDE9FE);';
       const itemArgs = JSON.stringify({merchantId,items:[{productId:p.id,quantity:1}]}).replace(/"/g,'&quot;');
       const escTitle = escapeHtml(p.title || 'this item');
