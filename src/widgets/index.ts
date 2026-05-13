@@ -38,7 +38,7 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 10;
+const WIDGET_VERSION = 11;
 
 /** Map a tool's outputUI value to its widget URI. */
 export function widgetUri(outputUI: string): string {
@@ -535,7 +535,6 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           const args = JSON.stringify({merchantId,productId:pid}).replace(/"/g,'&quot;');
           const prompt = escapeHtml('Tell me about ' + ptitle);
           const handoffArgs = JSON.stringify({merchantId, items:[{productId:pid, quantity:1}]}).replace(/"/g,'&quot;');
-          const addPrompt = escapeHtml('Add 1 ' + ptitle + ' to my cart');
           const buyPrompt = escapeHtml('Generate a secure browser checkout link for 1 ' + ptitle);
           // Use a real <img> with onerror — CSP blocks and 404s now hide the
           // img cleanly, exposing the placeholder layer underneath.
@@ -556,12 +555,10 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
                 <p class="nx-prod-title">\${escapeHtml(ptitle)}</p>
                 <div class="nx-prod-price">\${fmt(p.priceCents)}</div>
                 <div class="\${stockClass}">\${stockText}</div>
-                <div style="display:flex;gap:4px;margin-top:8px;">
-                  <button style="flex:1;padding:6px 4px;font-size:10px;font-weight:600;border-radius:6px;border:1px solid #E2E8F0;background:#fff;color:#475569;cursor:pointer;pointer-events:auto;font-family:inherit;"
-                          data-prompt-only="1" data-prompt="\${addPrompt}" title="Add to cart">＋ Add</button>
-                  <button style="flex:1;padding:6px 4px;font-size:10px;font-weight:600;border-radius:6px;border:1px solid #E2E8F0;background:#fff;color:#475569;cursor:pointer;pointer-events:auto;font-family:inherit;"
+                <div style="display:flex;gap:6px;margin-top:8px;">
+                  <button style="flex:1;padding:6px 4px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid #E2E8F0;background:#fff;color:#475569;cursor:pointer;pointer-events:auto;font-family:inherit;"
                           data-call-tool="get_product" data-args="\${args}" data-prompt="\${prompt}" title="View details">Details</button>
-                  <button style="flex:1;padding:6px 4px;font-size:10px;font-weight:700;border-radius:6px;border:0;background:linear-gradient(135deg,#67E8F9,#818CF8 50%,#C084FC);color:#0B0F2A;cursor:pointer;pointer-events:auto;font-family:inherit;"
+                  <button style="flex:1;padding:6px 4px;font-size:11px;font-weight:700;border-radius:6px;border:0;background:linear-gradient(135deg,#67E8F9,#818CF8 50%,#C084FC);color:#0B0F2A;cursor:pointer;pointer-events:auto;font-family:inherit;"
                           data-call-tool="create_handoff" data-args="\${handoffArgs}" data-prompt="\${buyPrompt}" title="Checkout">↗ Buy</button>
                 </div>
               </div>
@@ -680,15 +677,12 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         const handoffArgs = merchantId
           ? JSON.stringify({merchantId, items:[{productId:pid, quantity:1}]}).replace(/"/g,'&quot;')
           : '';
-        const addPrompt = escapeHtml('Add 1 ' + ptitle + ' to my cart');
         const buyPrompt = escapeHtml('Generate a secure browser checkout link for 1 ' + ptitle);
         const tileActions = merchantId ? (
-          '<div style="display:flex;gap:4px;margin-top:8px;">' +
-            '<button style="flex:1;padding:6px 4px;font-size:10px;font-weight:600;border-radius:6px;border:1px solid #E2E8F0;background:#fff;color:#475569;cursor:pointer;pointer-events:auto;font-family:inherit;"' +
-                   ' data-prompt-only="1" data-prompt="' + addPrompt + '" title="Add to cart">＋ Add</button>' +
-            '<button style="flex:1;padding:6px 4px;font-size:10px;font-weight:600;border-radius:6px;border:1px solid #E2E8F0;background:#fff;color:#475569;cursor:pointer;pointer-events:auto;font-family:inherit;"' +
+          '<div style="display:flex;gap:6px;margin-top:8px;">' +
+            '<button style="flex:1;padding:6px 4px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid #E2E8F0;background:#fff;color:#475569;cursor:pointer;pointer-events:auto;font-family:inherit;"' +
                    ' data-call-tool="get_product" data-args="' + args + '" data-prompt="' + prompt + '" title="View details">Details</button>' +
-            '<button style="flex:1;padding:6px 4px;font-size:10px;font-weight:700;border-radius:6px;border:0;background:linear-gradient(135deg,#67E8F9,#818CF8 50%,#C084FC);color:#0B0F2A;cursor:pointer;pointer-events:auto;font-family:inherit;"' +
+            '<button style="flex:1;padding:6px 4px;font-size:11px;font-weight:700;border-radius:6px;border:0;background:linear-gradient(135deg,#67E8F9,#818CF8 50%,#C084FC);color:#0B0F2A;cursor:pointer;pointer-events:auto;font-family:inherit;"' +
                    ' data-call-tool="create_handoff" data-args="' + handoffArgs + '" data-prompt="' + buyPrompt + '" title="Checkout">↗ Buy</button>' +
           '</div>'
         ) : '';
@@ -781,13 +775,6 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
             <span class="nx-btn-meta">Coming soon</span>
           </button>\`);
       }
-      // Add to cart — neutral (sends a chat message)
-      actions.push(\`
-        <button class="nx-btn nx-btn-secondary"
-                data-prompt-only="1"
-                data-prompt="Add 1 \${escTitle} to my cart">
-          <span>＋ Add to cart</span>
-        </button>\`);
       // Buy now in chat (IN_APP) — stub for demo, gated by merchant mode
       if (modes.indexOf('IN_APP') >= 0) {
         actions.push(\`
