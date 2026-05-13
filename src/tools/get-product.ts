@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { nexus } from '../client.js';
+import { inlineImages } from '../lib/inline-image.js';
 
 const inputSchema = z.object({
   merchantId: z.string().min(1),
@@ -48,8 +49,14 @@ export const getProductTool = {
           : mode === 'SIGNED_URL'
             ? ['SIGNED_URL']
             : ['IN_APP', 'SIGNED_URL'];
+    // Inline all product images as data URLs so the iframe doesn't need
+    // network access for them. Same rationale as search_products.
+    const product = productRes.data as { images?: string[] } & Record<string, unknown>;
+    if (product.images && product.images.length > 0) {
+      product.images = await inlineImages(product.images);
+    }
     return {
-      product: productRes.data,
+      product,
       merchant: {
         id: input.merchantId,
         displayName: merchant?.displayName ?? '',

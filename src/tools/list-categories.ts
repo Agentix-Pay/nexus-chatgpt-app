@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { nexus } from '../client.js';
+import { inlineImage } from '../lib/inline-image.js';
 
 const inputSchema = z.object({
   merchantId: z.string().min(1).describe('The merchant whose categories to list. Get this from list_merchants.'),
@@ -29,6 +30,14 @@ export const listCategoriesTool = {
     if (!result.ok) {
       return { error: { code: result.code, message: result.message } };
     }
-    return { merchantId: input.merchantId, categories: result.data.data };
+    // Inline each category's sample image as a data URL — same rationale as
+    // search_products / get_product.
+    const categories = await Promise.all(
+      result.data.data.map(async (c) => ({
+        ...c,
+        sampleImage: await inlineImage(c.sampleImage),
+      })),
+    );
+    return { merchantId: input.merchantId, categories };
   },
 };

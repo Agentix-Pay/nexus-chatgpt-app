@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { nexus } from '../client.js';
+import { inlineImages } from '../lib/inline-image.js';
 
 const inputSchema = z.object({
   merchantId: z.string().min(1).describe('The merchant to search within. Get this from list_merchants.'),
@@ -48,9 +49,20 @@ export const searchProductsTool = {
     if (!result.ok) {
       return { error: { code: result.code, message: result.message } };
     }
+    // Inline the first image of each product as a data URL. The iframe was
+    // rejecting all HTTP image loads regardless of CSP/proxy; data URLs need
+    // no network call and render in any sandbox.
+    const products = await Promise.all(
+      result.data.data.map(async (p) => {
+        const first = p.images?.[0];
+        if (!first) return p;
+        const inlined = await inlineImages([first]);
+        return { ...p, images: [inlined[0] ?? first, ...p.images.slice(1)] };
+      }),
+    );
     return {
       merchantId: input.merchantId,
-      products: result.data.data,
+      products,
       ...(input.category ? { category: input.category } : {}),
       ...(input.q ? { q: input.q } : {}),
     };
