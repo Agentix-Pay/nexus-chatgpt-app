@@ -143,7 +143,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",syste
 .nx-prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:8px;}
 .nx-prod{position:relative;overflow:hidden;border-radius:10px;border:1px solid #E2E8F0;background:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;transition:border-color .15s,box-shadow .15s,transform .1s;display:flex;flex-direction:column;}
 .nx-prod *{pointer-events:none;}
-.nx-prod-img{aspect-ratio:1;background:linear-gradient(135deg,#E0F2FE,#EDE9FE);background-size:cover;background-position:center;}
+.nx-prod-img{aspect-ratio:1;background:linear-gradient(135deg,#BAE6FD,#DDD6FE);background-size:cover;background-position:center;}
 .nx-prod-body{padding:10px 12px 12px;display:flex;flex-direction:column;gap:2px;}
 .nx-prod-title{font-size:13px;font-weight:600;color:#0F172A;line-height:1.3;margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .nx-prod-price{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600;color:#0F172A;margin-top:4px;}
@@ -160,7 +160,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",syste
 .nx-tile-clickable:hover{border-color:#818CF8;box-shadow:0 1px 2px rgba(15,23,42,.06),0 6px 18px rgba(129,140,248,.10);}
 .nx-tile-clickable:active{transform:scale(.995);}
 .nx-tile-clickable:focus-visible{outline:none;border-color:#818CF8;box-shadow:0 0 0 3px rgba(129,140,248,.30);}
-.nx-tile-img{width:56px;height:56px;border-radius:8px;background:linear-gradient(135deg,#E0F2FE,#EDE9FE);flex-shrink:0;background-size:cover;background-position:center;}
+.nx-tile-img{width:56px;height:56px;border-radius:8px;background:linear-gradient(135deg,#BAE6FD,#DDD6FE);flex-shrink:0;background-size:cover;background-position:center;}
 .nx-tile-body{flex:1;min-width:0;}
 .nx-tile-title{font-weight:600;color:#0F172A;font-size:14px;margin:0;}
 .nx-tile-meta{font-size:12px;color:#64748B;margin:2px 0 0;}
@@ -460,7 +460,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           const args = JSON.stringify(argsObj).replace(/"/g,'&quot;');
           const prompt = escapeHtml('Show me ' + (c.name || '') + ' products');
           const bg = c.sampleImage
-            ? "background-image:url('" + c.sampleImage + "'), linear-gradient(135deg,#E0F2FE,#EDE9FE);"
+            ? "background-image:url('" + c.sampleImage + "'), linear-gradient(135deg,#BAE6FD,#DDD6FE);"
             : '';
           return \`
             <div class="nx-cat" role="button" tabindex="0"
@@ -502,15 +502,17 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           const handoffArgs = JSON.stringify({merchantId, items:[{productId:pid, quantity:1}]}).replace(/"/g,'&quot;');
           const addPrompt = escapeHtml('Add 1 ' + ptitle + ' to my cart');
           const buyPrompt = escapeHtml('Generate a secure browser checkout link for 1 ' + ptitle);
-          // Stack url(...) on top of the gradient so a CSP block or 404 still
-          // shows the placeholder gradient instead of a pure-white box.
-          const bg = imgUrl
-            ? "background-image:url('" + imgUrl + "'), linear-gradient(135deg,#E0F2FE,#EDE9FE);"
+          // Use a real <img> with onerror — CSP blocks and 404s now hide the
+          // img cleanly, exposing the gradient placeholder on the parent div.
+          // background-image alone wasn't enough: when the URL fails, the
+          // browser leaves the broken-image state in place silently.
+          const imgTag = imgUrl
+            ? '<img src="' + escapeHtml(imgUrl) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">'
             : '';
           return \`
             <div class="nx-prod" role="button" tabindex="0"
                  data-call-tool="get_product" data-args="\${args}" data-prompt="\${prompt}">
-              <div class="nx-prod-img" style="\${bg}"></div>
+              <div class="nx-prod-img" style="position:relative;">\${imgTag}</div>
               <div class="nx-prod-body">
                 <p class="nx-prod-title">\${escapeHtml(ptitle)}</p>
                 <div class="nx-prod-price">\${fmt(p.priceCents)}</div>
@@ -573,7 +575,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         const args = JSON.stringify(argsObj).replace(/"/g,'&quot;');
         const prompt = escapeHtml('Show me ' + (c.name || '') + ' products');
         const bg = c.sampleImage
-          ? "background-image:url('" + c.sampleImage + "'), linear-gradient(135deg,#E0F2FE,#EDE9FE);"
+          ? "background-image:url('" + c.sampleImage + "'), linear-gradient(135deg,#BAE6FD,#DDD6FE);"
           : '';
         return \`
           <div class="nx-cat" role="button" tabindex="0"
@@ -630,8 +632,9 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         const clickAttrs = merchantId
           ? 'role="button" tabindex="0" data-call-tool="get_product" data-args="' + args + '" data-prompt="' + prompt + '"'
           : 'data-prompt-only="1" data-prompt="' + prompt + '" role="button" tabindex="0"';
-        const bg = imgUrl
-          ? "background-image:url('" + imgUrl + "'), linear-gradient(135deg,#E0F2FE,#EDE9FE);"
+        // Real <img> with onerror — see merchant-list note above for why.
+        const imgTag = imgUrl
+          ? '<img src="' + escapeHtml(imgUrl) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">'
           : '';
         // 3-button action row — only when we have a merchantId (needed for handoff)
         const handoffArgs = merchantId
@@ -651,7 +654,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         ) : '';
         return \`
           <div class="nx-prod" \${clickAttrs}>
-            <div class="nx-prod-img" style="\${bg}"></div>
+            <div class="nx-prod-img" style="position:relative;">\${imgTag}</div>
             <div class="nx-prod-body">
               <p class="nx-prod-title">\${escapeHtml(ptitle)}</p>
               <div class="nx-prod-price">\${fmt(p.priceCents)}</div>
@@ -704,9 +707,11 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
       const m = data.merchant || {};
       const merchantId = m.id || '';
       const modes = m.availableModes || ['IN_APP'];
-      const imgStyle = p.images && p.images[0]
-        ? 'background-image:url(\\'' + escapeHtml(p.images[0]) + '\\'), linear-gradient(135deg,#E0F2FE,#EDE9FE);background-size:cover;background-position:center;'
-        : 'background:linear-gradient(135deg,#E0F2FE,#EDE9FE);';
+      // Hero image — real <img> with onerror so CSP blocks / 404s reveal the
+      // gradient placeholder underneath instead of leaving a pure-white area.
+      const heroImg = p.images && p.images[0]
+        ? '<img src="' + escapeHtml(p.images[0]) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">'
+        : '';
       const itemArgs = JSON.stringify({merchantId,items:[{productId:p.id,quantity:1}]}).replace(/"/g,'&quot;');
       const escTitle = escapeHtml(p.title || 'this item');
       const escMerch = escapeHtml(m.displayName || 'this store');
@@ -777,7 +782,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           ? '<p class="nx-eyebrow" style="margin:14px 0 8px;">Checkout options</p>'
           : '<p class="nx-eyebrow" style="margin:14px 0 8px;">Checkout</p>';
       root.innerHTML = '<div class="nx-card">' +
-        '<div style="width:100%;aspect-ratio:16/9;border-radius:10px;margin-bottom:14px;' + imgStyle + '"></div>' +
+        '<div style="position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;margin-bottom:14px;overflow:hidden;background:linear-gradient(135deg,#BAE6FD,#DDD6FE);">' + heroImg + '</div>' +
         '<h3 class="nx-title">' + escapeHtml(p.title) + '</h3>' +
         '<p class="nx-tile-meta" style="margin-bottom:10px;">SKU ' + escapeHtml(p.sku || '') + (m.displayName ? ' · ' + escMerch : '') + '</p>' +
         (p.description ? '<p style="font-size:13px;color:#475569;margin:0 0 14px;line-height:1.55;">' + escapeHtml(p.description) + '</p>' : '') +
