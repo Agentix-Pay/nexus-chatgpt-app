@@ -438,6 +438,9 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           const ptitle = p.title || '';
           const args = JSON.stringify({merchantId,productId:pid}).replace(/"/g,'&quot;');
           const prompt = escapeHtml('Tell me about ' + ptitle);
+          const handoffArgs = JSON.stringify({merchantId, items:[{productId:pid, quantity:1}]}).replace(/"/g,'&quot;');
+          const addPrompt = escapeHtml('Add 1 ' + ptitle + ' to my cart');
+          const buyPrompt = escapeHtml('Generate a secure browser checkout link for 1 ' + ptitle);
           const bg = imgUrl ? "background-image:url('" + imgUrl + "');" : '';
           return \`
             <div class="nx-prod" role="button" tabindex="0"
@@ -447,6 +450,14 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
                 <p class="nx-prod-title">\${escapeHtml(ptitle)}</p>
                 <div class="nx-prod-price">\${fmt(p.priceCents)}</div>
                 <div class="\${stockClass}">\${stockText}</div>
+                <div style="display:flex;gap:4px;margin-top:8px;">
+                  <button style="flex:1;padding:6px 4px;font-size:10px;font-weight:600;border-radius:6px;border:1px solid #E2E8F0;background:#fff;color:#475569;cursor:pointer;pointer-events:auto;font-family:inherit;"
+                          data-prompt-only="1" data-prompt="\${addPrompt}" title="Add to cart">＋ Add</button>
+                  <button style="flex:1;padding:6px 4px;font-size:10px;font-weight:600;border-radius:6px;border:1px solid #E2E8F0;background:#fff;color:#475569;cursor:pointer;pointer-events:auto;font-family:inherit;"
+                          data-call-tool="get_product" data-args="\${args}" data-prompt="\${prompt}" title="View details">Details</button>
+                  <button style="flex:1;padding:6px 4px;font-size:10px;font-weight:700;border-radius:6px;border:0;background:linear-gradient(135deg,#67E8F9,#818CF8 50%,#C084FC);color:#0B0F2A;cursor:pointer;pointer-events:auto;font-family:inherit;"
+                          data-call-tool="create_handoff" data-args="\${handoffArgs}" data-prompt="\${buyPrompt}" title="Checkout">↗ Buy</button>
+                </div>
               </div>
             </div>\`;
         }).join('');
@@ -553,6 +564,22 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           ? 'role="button" tabindex="0" data-call-tool="get_product" data-args="' + args + '" data-prompt="' + prompt + '"'
           : 'data-prompt-only="1" data-prompt="' + prompt + '" role="button" tabindex="0"';
         const bg = imgUrl ? "background-image:url('" + imgUrl + "');" : '';
+        // 3-button action row — only when we have a merchantId (needed for handoff)
+        const handoffArgs = merchantId
+          ? JSON.stringify({merchantId, items:[{productId:pid, quantity:1}]}).replace(/"/g,'&quot;')
+          : '';
+        const addPrompt = escapeHtml('Add 1 ' + ptitle + ' to my cart');
+        const buyPrompt = escapeHtml('Generate a secure browser checkout link for 1 ' + ptitle);
+        const tileActions = merchantId ? (
+          '<div style="display:flex;gap:4px;margin-top:8px;">' +
+            '<button style="flex:1;padding:6px 4px;font-size:10px;font-weight:600;border-radius:6px;border:1px solid #E2E8F0;background:#fff;color:#475569;cursor:pointer;pointer-events:auto;font-family:inherit;"' +
+                   ' data-prompt-only="1" data-prompt="' + addPrompt + '" title="Add to cart">＋ Add</button>' +
+            '<button style="flex:1;padding:6px 4px;font-size:10px;font-weight:600;border-radius:6px;border:1px solid #E2E8F0;background:#fff;color:#475569;cursor:pointer;pointer-events:auto;font-family:inherit;"' +
+                   ' data-call-tool="get_product" data-args="' + args + '" data-prompt="' + prompt + '" title="View details">Details</button>' +
+            '<button style="flex:1;padding:6px 4px;font-size:10px;font-weight:700;border-radius:6px;border:0;background:linear-gradient(135deg,#67E8F9,#818CF8 50%,#C084FC);color:#0B0F2A;cursor:pointer;pointer-events:auto;font-family:inherit;"' +
+                   ' data-call-tool="create_handoff" data-args="' + handoffArgs + '" data-prompt="' + buyPrompt + '" title="Checkout">↗ Buy</button>' +
+          '</div>'
+        ) : '';
         return \`
           <div class="nx-prod" \${clickAttrs}>
             <div class="nx-prod-img" style="\${bg}"></div>
@@ -560,6 +587,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
               <p class="nx-prod-title">\${escapeHtml(ptitle)}</p>
               <div class="nx-prod-price">\${fmt(p.priceCents)}</div>
               <div class="\${stockClass}">\${stockText}</div>
+              \${tileActions}
             </div>
           </div>\`;
       }).join('');
