@@ -60,16 +60,42 @@ export function widgetMeta(): Record<string, unknown> {
       domain: WIDGET_DOMAIN,
       csp: {
         connectDomains: ['https://agentix-nexus.fly.dev'],
-        // Image-host allowlist for product/category thumbnails. loremflickr.com
-        // is the mock merchant's placeholder source; cdn.shopify.com and Unsplash
-        // cover the common real-merchant CDNs we'll point at when MockAdapter is
-        // swapped for Shopify/Woo. *.oaistatic.com stays for any OpenAI-served
-        // assets the host injects.
+        // Image-host allowlist for product/category thumbnails.
+        //
+        // The OpenAI Apps SDK iframe CSP gates resource loads — anything not in
+        // this list is blocked silently, so missing entries here are the #1
+        // cause of "images don't show" bugs when onboarding a new merchant.
+        //
+        // Covered today: OpenAI's own static assets, the mock merchant's
+        // placeholder source (loremflickr), and the most common e-commerce
+        // image CDNs. When onboarding a merchant whose images live elsewhere
+        // (e.g. their own domain), add the host here — we can't allowlist
+        // dynamically because resource manifests are sent at session start.
         resourceDomains: [
           'https://*.oaistatic.com',
+          // Mock merchant placeholder
           'https://loremflickr.com',
           'https://*.loremflickr.com',
+          // Shopify
           'https://cdn.shopify.com',
+          'https://*.shopifycdn.com',
+          // WooCommerce / WordPress (Jetpack image CDN is the common case)
+          'https://i0.wp.com',
+          'https://i1.wp.com',
+          'https://i2.wp.com',
+          // BigCommerce
+          'https://*.bigcommerce.com',
+          // Cloudinary, ImageKit, Cloudflare Images — common third-party CDNs
+          'https://res.cloudinary.com',
+          'https://ik.imagekit.io',
+          'https://imagedelivery.net',
+          // Squarespace
+          'https://images.squarespace-cdn.com',
+          // AWS CloudFront / S3 (very common for self-hosted catalogs)
+          'https://*.cloudfront.net',
+          'https://*.s3.amazonaws.com',
+          'https://s3.amazonaws.com',
+          // Stock / placeholder libraries
           'https://images.unsplash.com',
         ],
       },
@@ -176,7 +202,21 @@ const POSTMSG_LISTENER = `
 const root = document.getElementById('root');
 let __rendered = false;
 let __lastData = null;
-function fmt(c){if(c==null)return '$—';return '$'+(Number(c)/100).toFixed(2);}
+let __currency = 'USD';
+// Tracks the current merchant's currency so price formatting respects it. Set
+// from data.currency / data.merchant.currency / data.checkout.currency on each
+// render. Falls back to USD if nothing arrives — safe for the mock and any
+// merchant that doesn't surface its currency explicitly.
+function setCurrency(d){
+  if(!d||typeof d!=='object')return;
+  const c = d.currency || (d.merchant&&d.merchant.currency) || (d.checkout&&d.checkout.currency) || (d.order&&d.order.currency);
+  if(typeof c==='string'&&c.length>=3) __currency = c.toUpperCase();
+}
+function fmt(c){
+  if(c==null)return '—';
+  try{return new Intl.NumberFormat(undefined,{style:'currency',currency:__currency,maximumFractionDigits:2}).format(Number(c)/100);}
+  catch(e){return (__currency==='USD'?'$':__currency+' ')+(Number(c)/100).toFixed(2);}
+}
 function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 // Call another tool from inside the widget. Tries every plausible API surface
 // the host might expose. Falls through to a follow-up prompt, then postMessage,
@@ -289,6 +329,7 @@ document.addEventListener('keydown',function(e){
 },true);
 function safeRender(data){
   if(!data||(typeof data==='object'&&Object.keys(data).length===0))return false;
+  setCurrency(data);
   // Server-reported error data: render a uniform error card instead of letting
   // the widget render empty placeholders against a missing payload.
   if(data&&typeof data==='object'&&data.error&&typeof data.error==='object'){
@@ -670,17 +711,21 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         sku: p.sku,
       };
       // Build action buttons based on availableModes.
-      // Demo scope: only SIGNED_URL is wired end-to-end. IN_APP, MERCHANT_PAGE,
-      // and CHATGPT_PAY are rendered as disabled stubs so the three-flow story
-      // is visible, but they can't be tapped — keeps the demo on rails.
+      // Demo scope: only SIGNED_URL is wired end-to-end. The other modes
+      // render as disabled "Coming soon" stubs, BUT only when the merchant
+      // actually claims to support them — so a real Shopify merchant that
+      // only declares SIGNED_URL won't show irrelevant IN_APP/MERCHANT_PAGE
+      // stubs, and won't get a "Pay with ChatGPT" stub it didn't ask for.
       const actions = [];
       const disabledStyle = 'opacity:0.45;cursor:not-allowed;filter:grayscale(0.25);';
-      // Pay with ChatGPT (native, requestCheckout) — stub for demo
-      actions.push(\`
-        <button class="nx-btn nx-btn-secondary" disabled aria-disabled="true" style="\${disabledStyle}">
-          <span>⚡ Pay with ChatGPT</span>
-          <span class="nx-btn-meta">Coming soon</span>
-        </button>\`);
+      // Pay with ChatGPT (native, requestCheckout) — gated on merchant claiming CHATGPT_PAY
+      if (modes.indexOf('CHATGPT_PAY') >= 0) {
+        actions.push(\`
+          <button class="nx-btn nx-btn-secondary" disabled aria-disabled="true" style="\${disabledStyle}">
+            <span>⚡ Pay with ChatGPT</span>
+            <span class="nx-btn-meta">Coming soon</span>
+          </button>\`);
+      }
       // Add to cart — neutral (sends a chat message)
       actions.push(\`
         <button class="nx-btn nx-btn-secondary"

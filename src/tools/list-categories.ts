@@ -14,7 +14,7 @@ export interface Category {
 export const listCategoriesTool = {
   name: 'list_categories',
   description:
-    'List the product categories available at a specific merchant. ALWAYS use this (not list_merchants) when the shopper has already chosen a store and wants to browse it — for prompts like "browse Mall of Toys", "show categories", "what does this store sell", or after they tap a Browse button on a merchant card. Returns category names with product counts and sample images for visual category tiles.',
+    'List the product categories available at a specific merchant. ALWAYS use this (not list_merchants) when the shopper has already chosen a store and wants to browse it — for prompts like "show me categories at <store>", "show categories", "browse <store name>", "what does this store sell", or after they tap a Browse button on a merchant card. Returns category names with product counts and sample images for visual category tiles.',
   inputSchema,
   outputUI: 'CategoryGrid',
   annotations: { title: 'Browse categories', readOnlyHint: true, openWorldHint: false, destructiveHint: false },
