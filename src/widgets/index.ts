@@ -289,6 +289,13 @@ document.addEventListener('keydown',function(e){
 },true);
 function safeRender(data){
   if(!data||(typeof data==='object'&&Object.keys(data).length===0))return false;
+  // Server-reported error data: render a uniform error card instead of letting
+  // the widget render empty placeholders against a missing payload.
+  if(data&&typeof data==='object'&&data.error&&typeof data.error==='object'){
+    const msg=data.error.message||data.error.code||'Something went wrong. Please try again.';
+    root.innerHTML='<div class="nx-card"><p class="nx-eyebrow">Couldn&rsquo;t complete that</p><div class="nx-error">'+escapeHtml(String(msg))+'</div></div>';
+    __rendered=true;return true;
+  }
   try{render(data);__rendered=true;return true;}
   catch(err){root.innerHTML='<div class="nx-card"><div class="nx-error">Render error: '+escapeHtml(err.message)+'</div></div>';return true;}
 }
@@ -484,7 +491,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
             cats.map(c => {
               const safeC = escapeHtml(c).replace(/"/g,'&quot;');
               const cArgs = JSON.stringify({merchantId,category:c,limit:24}).replace(/"/g,'&quot;');
-              const cPrompt = 'Show ' + safeC;
+              const cPrompt = 'Show me ' + safeC + ' products';
               const active = filterCategory === c;
               const style = active
                 ? 'padding:5px 10px;border-radius:999px;border:1px solid #818CF8;background:#EEF2FF;color:#3730A3;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;'
@@ -877,16 +884,42 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
     renderJs: `
       const o = data.order || {};
       const status = (o.status || 'PENDING').toUpperCase();
-      const positive = ['CONFIRMED','SHIPPED','DELIVERED'].indexOf(status) >= 0;
-      const negative = ['CANCELLED','FAILED'].indexOf(status) >= 0;
-      const pillClass = positive ? 'nx-pill nx-pill-success' : negative ? 'nx-pill nx-pill-warn' : 'nx-pill';
+      const positive = ['CONFIRMED','SHIPPED','DELIVERED','PAID'].indexOf(status) >= 0;
+      const negative = ['CANCELLED','FAILED','EXPIRED'].indexOf(status) >= 0;
+      const isPending = !positive && !negative;
+      // Pending state — shopper tapped "Check order status" but the
+      // PendingOrder hasn't been completed yet. Show a clearer
+      // "waiting for payment" message instead of a confusing $0/PENDING row.
+      if (isPending) {
+        const total = (o.totalCents != null) ? fmt(o.totalCents) : '';
+        root.innerHTML = '<div class="nx-card" style="text-align:center;">' +
+          '<div style="font-size:32px;margin-bottom:8px;">⏳</div>' +
+          '<h3 class="nx-title" style="margin-bottom:6px;">Waiting for payment</h3>' +
+          '<p class="nx-meta" style="margin-bottom:14px;">' +
+            'We haven&rsquo;t received confirmation from the checkout page yet.' +
+          '</p>' +
+          (total ? '<div class="nx-grand-amount" style="font-size:24px;margin-bottom:14px;">' + total + '</div>' : '') +
+          '<p style="font-size:12px;color:#64748B;line-height:1.5;">' +
+            'Finish payment in the browser tab, then tap <strong>✓ Check order status</strong> again to confirm.' +
+          '</p>' +
+        '</div>';
+        return;
+      }
+      const pillClass = positive ? 'nx-pill nx-pill-success' : 'nx-pill nx-pill-warn';
+      const headerIcon = positive
+        ? '<div class="nx-check" style="margin-bottom:10px;">✓</div>'
+        : '<div style="font-size:32px;text-align:center;margin-bottom:6px;">⚠️</div>';
       const tracking = o.trackingNumber
         ? '<div class="nx-row"><span>Tracking</span><span class="nx-amount">' +
             (o.trackingUrl ? '<a href="' + escapeHtml(o.trackingUrl) + '" target="_top" style="color:#1D4ED8;">' + escapeHtml(o.trackingNumber) + '</a>' : escapeHtml(o.trackingNumber)) +
           '</span></div>'
         : '';
-      root.innerHTML = '<div class="nx-card"><p class="nx-eyebrow">Order status</p>' +
-        '<h3 class="nx-title">' + escapeHtml(o.orderNumber || '—') + '</h3>' +
+      const headerText = positive ? 'Order confirmed' : 'Order ' + status.toLowerCase();
+      root.innerHTML = '<div class="nx-card">' +
+        '<div style="text-align:center;">' + headerIcon +
+          '<h3 class="nx-title" style="margin-bottom:6px;">' + escapeHtml(headerText) + '</h3>' +
+          (o.orderNumber ? '<p class="nx-meta" style="margin-bottom:14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">' + escapeHtml(o.orderNumber) + '</p>' : '') +
+        '</div>' +
         '<div class="nx-row"><span>Status</span><span><span class="' + pillClass + '">' + escapeHtml(status) + '</span></span></div>' +
         (o.fulfillmentStatus ? '<div class="nx-row"><span>Fulfillment</span><span>' + escapeHtml(o.fulfillmentStatus) + '</span></div>' : '') +
         '<div class="nx-row"><span>Total</span><span class="nx-amount">' + fmt(o.totalCents) + '</span></div>' +
