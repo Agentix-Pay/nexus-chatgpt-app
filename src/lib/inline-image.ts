@@ -32,18 +32,38 @@ const ALLOW = [
   /^https:\/\/images\.unsplash\.com\//,
 ];
 
+/**
+ * Some upstream image sources serve images much larger than the widget needs.
+ * Tiles render ~280×280px; serving 800×600 wastes both fetch time and payload
+ * size to ChatGPT. Rewrite known sources to smaller dimensions before fetch.
+ */
+function rewriteForSize(url: string): string {
+  // loremflickr: https://loremflickr.com/<w>/<h>/<tags>?lock=N → 300×300
+  const lf = url.match(/^(https:\/\/loremflickr\.com\/)\d+\/\d+(\/.+)$/);
+  if (lf) return `${lf[1]}300/300${lf[2]}`;
+  // Shopify CDN supports size suffixes — most product image URLs are like
+  // https://cdn.shopify.com/.../image.jpg → image_400x400.jpg
+  // We don't blanket-rewrite Shopify because their URLs encode size differently
+  // per shop; leave the upstream URL alone until we have a specific merchant
+  // to tune for.
+  return url;
+}
+
 async function inlineOne(url: string): Promise<string> {
   if (!url || typeof url !== 'string') return '';
   if (url.startsWith('data:')) return url;
   if (!ALLOW.some((re) => re.test(url))) return url; // pass through unrecognised
 
+  // Cache key is the original URL so repeat calls hit even if rewriting changes.
   const hit = cache.get(url);
   if (hit && hit.expires > Date.now()) return hit.data;
+
+  const fetchUrl = rewriteForSize(url);
 
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5_000);
-    const r = await fetch(url, { redirect: 'follow', signal: controller.signal });
+    const r = await fetch(fetchUrl, { redirect: 'follow', signal: controller.signal });
     clearTimeout(timer);
     if (!r.ok) return url;
     const contentType = r.headers.get('content-type') ?? 'image/jpeg';
