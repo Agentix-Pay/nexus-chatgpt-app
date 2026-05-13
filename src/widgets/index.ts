@@ -39,7 +39,7 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 13;
+const WIDGET_VERSION = 14;
 
 /** Map a tool's outputUI value to its widget URI. */
 export function widgetUri(outputUI: string): string {
@@ -975,22 +975,47 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
       // summary inline. True autonomous push-back is a future webhook project.
       const statusArgs = JSON.stringify({orderId: rawOrderId}).replace(/"/g,'&quot;');
       const statusPrompt = 'Did my order go through?';
+      // Two states for the confirm button:
+      //   Initial: secondary "✓ Check order status · after paying"
+      //   After user taps the secure link: primary green CTA "I've completed payment"
+      // The transform is a click handler attached after innerHTML render.
       const statusBtn = rawOrderId ? (
-        '<button class="nx-btn nx-btn-secondary" style="margin-top:10px;"' +
+        '<button id="__nx_confirm_btn" class="nx-btn nx-btn-secondary" style="margin-top:10px;"' +
                 ' data-call-tool="get_order_status"' +
                 ' data-args="' + statusArgs + '"' +
                 ' data-prompt="' + statusPrompt + '">' +
-          '<span>✓ Check order status</span>' +
-          '<span class="nx-btn-meta">after paying</span>' +
+          '<span id="__nx_confirm_label">✓ Check order status</span>' +
+          '<span class="nx-btn-meta" id="__nx_confirm_meta">after paying</span>' +
         '</button>'
       ) : '';
       root.innerHTML = '<div class="nx-card"><p class="nx-eyebrow">Checkout link ready</p>' +
         '<h3 class="nx-title">' + escapeHtml(merchant) + ' · ' + fmt(total) + '</h3>' +
         '<p class="nx-meta" style="margin-bottom:12px;">Order ' + escapeHtml(orderId) + ' · Expires in ' + minutes + ' min</p>' +
-        '<a href="' + escapeHtml(url) + '" target="_top" class="nx-button nx-button-gradient" style="text-decoration:none;">🔒 Open secure checkout →</a>' +
+        '<a id="__nx_secure_link" href="' + escapeHtml(url) + '" target="_top" class="nx-button nx-button-gradient" style="text-decoration:none;">🔒 Open secure checkout →</a>' +
         statusBtn +
-        '<p style="margin-top:10px;font-size:12px;color:#64748B;">' + where + ' Once you\\'ve paid, tap <strong>Check order status</strong> to confirm.</p>' +
+        '<p id="__nx_hint" style="margin-top:10px;font-size:12px;color:#64748B;">' + where + ' Once you\\'ve paid, tap <strong>Check order status</strong> to confirm.</p>' +
       '</div>';
+      // Promote the confirm button to a bright green primary CTA after the
+      // user opens the secure-link tab — they shouldn't have to hunt for it
+      // when they return.
+      const secureLinkEl = document.getElementById('__nx_secure_link');
+      const confirmBtn = document.getElementById('__nx_confirm_btn');
+      const confirmLabel = document.getElementById('__nx_confirm_label');
+      const confirmMeta = document.getElementById('__nx_confirm_meta');
+      const hintEl = document.getElementById('__nx_hint');
+      if (secureLinkEl && confirmBtn && confirmLabel && confirmMeta && hintEl) {
+        secureLinkEl.addEventListener('click', function(){
+          confirmBtn.className = 'nx-btn nx-btn-primary';
+          confirmBtn.style.marginTop = '16px';
+          confirmBtn.style.background = 'linear-gradient(135deg,#34D399,#10B981)';
+          confirmBtn.style.color = '#fff';
+          confirmBtn.style.boxShadow = '0 1px 2px rgba(15,23,42,.10),0 8px 22px rgba(16,185,129,.30)';
+          confirmLabel.textContent = '✓ I\\'ve completed payment';
+          confirmMeta.textContent = 'tap to confirm';
+          hintEl.innerHTML = '<strong>Finished paying?</strong> Tap the green button above to confirm your order in chat.';
+          hintEl.style.color = '#065F46';
+        }, { once: true });
+      }
     `,
   },
 
@@ -1048,18 +1073,38 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         return;
       }
       const pillClass = positive ? 'nx-pill nx-pill-success' : 'nx-pill nx-pill-warn';
-      const headerIcon = positive
-        ? '<div class="nx-check" style="margin-bottom:10px;">✓</div>'
-        : '<div style="font-size:32px;text-align:center;margin-bottom:6px;">⚠️</div>';
       const tracking = o.trackingNumber
         ? '<div class="nx-row"><span>Tracking</span><span class="nx-amount">' +
             (o.trackingUrl ? '<a href="' + escapeHtml(o.trackingUrl) + '" target="_top" style="color:#1D4ED8;">' + escapeHtml(o.trackingNumber) + '</a>' : escapeHtml(o.trackingNumber)) +
           '</span></div>'
         : '';
-      const headerText = positive ? 'Order confirmed' : 'Order ' + status.toLowerCase();
+      const headerText = positive ? 'Payment confirmed' : 'Order ' + status.toLowerCase();
+      const merchantName = o.merchantName || '';
+      // Positive (success) — full celebration treatment. The post-checkout
+      // moment is the demo's payoff; make it land.
+      if (positive) {
+        root.innerHTML = '<div class="nx-card" style="text-align:center;padding:32px 24px;">' +
+          '<div class="nx-check" style="margin:0 auto 14px;">✓</div>' +
+          '<h3 class="nx-title" style="margin-bottom:4px;">' + escapeHtml(headerText) + '</h3>' +
+          (merchantName ? '<p class="nx-meta" style="margin-bottom:18px;">at <strong>' + escapeHtml(merchantName) + '</strong></p>' : '<p class="nx-meta" style="margin-bottom:18px;">Thanks for your order</p>') +
+          '<div class="nx-grand-amount" style="font-size:36px;margin-bottom:14px;">' + fmt(o.totalCents) + '</div>' +
+          (o.orderNumber
+            ? '<div style="display:inline-block;padding:6px 12px;border-radius:6px;background:#F1F5F9;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#0F172A;margin-bottom:14px;">Order ' + escapeHtml(o.orderNumber) + '</div>'
+            : '') +
+          '<div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:' + (tracking ? '14px' : '0') + ';">' +
+            '<span class="' + pillClass + '">' + escapeHtml(status) + '</span>' +
+            (o.fulfillmentStatus ? '<span class="nx-pill">' + escapeHtml(o.fulfillmentStatus) + '</span>' : '') +
+          '</div>' +
+          (tracking ? '<div style="border-top:1px solid #E2E8F0;padding-top:10px;text-align:left;">' + tracking + '</div>' : '') +
+        '</div>';
+        return;
+      }
+      // Negative state (cancelled / failed / expired) — original layout but with merchant
+      const headerIcon = '<div style="font-size:32px;text-align:center;margin-bottom:6px;">⚠️</div>';
       root.innerHTML = '<div class="nx-card">' +
         '<div style="text-align:center;">' + headerIcon +
           '<h3 class="nx-title" style="margin-bottom:6px;">' + escapeHtml(headerText) + '</h3>' +
+          (merchantName ? '<p class="nx-meta" style="margin-bottom:6px;">' + escapeHtml(merchantName) + '</p>' : '') +
           (o.orderNumber ? '<p class="nx-meta" style="margin-bottom:14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">' + escapeHtml(o.orderNumber) + '</p>' : '') +
         '</div>' +
         '<div class="nx-row"><span>Status</span><span><span class="' + pillClass + '">' + escapeHtml(status) + '</span></span></div>' +
