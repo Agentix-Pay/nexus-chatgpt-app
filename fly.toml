@@ -16,7 +16,12 @@ primary_region = 'iad'
 [http_service]
   internal_port = 4400
   force_https = true
-  auto_stop_machines = 'stop'
+  # Machine stays running 24/7 — never auto-stops, never scale-to-zero.
+  # Critical for the demo path: someone else (CTO/CEO/VIP) may hit the App
+  # at any hour and we can't pre-prime it for them. Combined with
+  # min_machines_running=1 below, this locks the machine on. Trade-off is
+  # ~$2/mo of shared-CPU time we'd otherwise save; cheap insurance.
+  auto_stop_machines = false
   auto_start_machines = true
   min_machines_running = 1
   processes = ['app']
