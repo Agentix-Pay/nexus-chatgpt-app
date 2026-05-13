@@ -157,7 +157,9 @@ function buildServer(): Server {
 
   server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
     const uri = req.params.uri;
-    const m = uri.match(/^ui:\/\/widget\/([a-z-]+)\.html$/);
+    // Accept optional ?v=N query suffix so cache-bust URIs still match. The
+    // version is encoded in widgetUri() — see WIDGET_VERSION in widgets/index.ts.
+    const m = uri.match(/^ui:\/\/widget\/([a-z-]+)\.html(?:\?.*)?$/);
     const name = m?.[1];
     if (!name || !(WIDGET_NAMES as readonly string[]).includes(name)) {
       throw new Error(`Unknown widget URI: ${uri}`);

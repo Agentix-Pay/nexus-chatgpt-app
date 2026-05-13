@@ -32,6 +32,14 @@ export const WIDGET_NAMES = [
 
 export type WidgetName = (typeof WIDGET_NAMES)[number];
 
+/**
+ * Bump this when widget HTML/JS changes and you need ChatGPT to discard its
+ * cached iframe and re-fetch the resource. ChatGPT caches by the full URI
+ * string, so appending `?v=N` to the URI is enough — the server-side resource
+ * handler strips the query before matching.
+ */
+const WIDGET_VERSION = 3;
+
 /** Map a tool's outputUI value to its widget URI. */
 export function widgetUri(outputUI: string): string {
   // Three browsing tools (list_merchants, list_categories, search_products) all
@@ -50,7 +58,7 @@ export function widgetUri(outputUI: string): string {
     OrderStatusCard: 'order-status',
   };
   const name = map[outputUI] ?? 'merchant-list';
-  return `ui://widget/${name}.html`;
+  return `ui://widget/${name}.html?v=${WIDGET_VERSION}`;
 }
 
 /** Per-widget _meta.ui block for resource registration (CSP, domain, etc.). */
@@ -431,6 +439,10 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           // GPT routes "Browse <name>" back to list_merchants instead of
           // list_categories. The tool description lists this exact trigger phrase.
           const prompt = escapeHtml('Show me categories at ' + name);
+          // Customer-facing view — show only the store name and the Browse CTA.
+          // Domain (e.g. "mall-of-toys.example.com") and platform (e.g. "MOCK"
+          // or "SHOPIFY") are admin-tier metadata that don't belong in a
+          // shopping experience. Surface them on a future admin tile if needed.
           return \`
             <div class="nx-tile nx-tile-clickable" role="button" tabindex="0"
                  data-call-tool="list_categories"
@@ -439,7 +451,6 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
               <div class="nx-tile-img"></div>
               <div class="nx-tile-body">
                 <p class="nx-tile-title">\${escapeHtml(name)}</p>
-                <p class="nx-tile-meta">\${escapeHtml(m.domain || '')}\${m.platform ? ' · <span class="nx-pill">' + escapeHtml(m.platform) + '</span>' : ''}</p>
               </div>
               <div class="nx-tile-meta" style="align-self:center;color:#818CF8;font-weight:500;">Browse →</div>
             </div>\`;
