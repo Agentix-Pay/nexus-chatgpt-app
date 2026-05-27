@@ -113,10 +113,30 @@ Nexus exposes `merchant.checkoutMode` on `list_merchants` responses. The App sho
 ## Tests
 
 ```bash
-npm test
+npm test                  # unit tests (tests/**, excludes tests/e2e/)
+npm run test:regression   # @regression-tagged tests only (passes if none exist)
+npm run test:e2e          # e2e smoke against a running HTTP server on :4400
 ```
 
-Currently 15 tests covering all UI renderers (XSS escaping, empty states, price formatting, demo/real mode banners, status pill colors, tracking links).
+Currently 15 unit tests covering all UI renderers (XSS escaping, empty states, price formatting, demo/real mode banners, status pill colors, tracking links) plus 2 e2e smoke tests against `/healthz` and `/manifest.json`.
+
+### CI
+
+GitHub Actions runs three jobs in parallel on every PR + push to `master`. Mirrors the dashboard pipeline ([AGX-34](https://linear.app/agentix-pay/issue/AGX-34)) and sibling nexus ticket.
+
+| Job | Triggers | Required? | What it runs |
+|---|---|---|---|
+| `unit-tests` | PR + push | ✅ blocks merge | `npm test` (Vitest over `tests/**`, excluding `tests/e2e/`) |
+| `regression-tests` | PR + push | ✅ blocks merge | `npm run test:regression` (`--testNamePattern "@regression" --passWithNoTests`) |
+| `e2e-tests` | PR (only when `src/**`, `tests/**`, `manifest.json` changes) + nightly @ 06:00 UTC + `workflow_dispatch` | ⚠️ advisory only | Builds + boots the HTTP MCP server on :4400, runs `tests/e2e/smoke.test.ts` against `/healthz` + `/manifest.json` |
+
+**Tagging a test as `@regression`:** put the literal substring in the `it()` description.
+
+```ts
+it('escapes script tags in user input @regression', () => { /* ... */ });
+```
+
+**Promoting e2e to required:** track its pass rate for ~2 weeks; once stable, add `e2e-tests` to `master` branch protection via `gh api`.
 
 ## Deploy
 

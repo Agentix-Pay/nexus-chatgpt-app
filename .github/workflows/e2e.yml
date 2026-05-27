@@ -1,0 +1,86 @@
+name: e2e-tests
+
+# Advisory only — not required for merge while flake is shaken out.
+# Promote to a required check in branch protection once it's been
+# stable for ~2 weeks.
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'manifest.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/e2e.yml'
+  schedule:
+    # 06:00 UTC nightly
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e-tests:
+    name: e2e-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      PORT: '4400'
+      E2E_BASE_URL: http://localhost:4400
+      # NEXUS_BASE_URL stays at the server's hard-coded default so the
+      # e2e smoke doesn't reach across the network — we only check the
+      # local /healthz and /manifest.json endpoints, no upstream calls.
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Start MCP HTTP server
+        run: |
+          node dist/server.js --transport=http --port=4400 > /tmp/chatgpt-app.log 2>&1 &
+          echo $! > /tmp/chatgpt-app.pid
+
+      - name: Wait for server to respond
+        run: |
+          for i in {1..30}; do
+            if curl -fsS -o /dev/null http://localhost:4400/healthz; then
+              echo "Server is up (took ${i}s)"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server never responded — last 200 lines of log:"
+          tail -n 200 /tmp/chatgpt-app.log || true
+          exit 1
+
+      - name: Run e2e smoke tests
+        run: npm run test:e2e
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f /tmp/chatgpt-app.pid ]; then
+            kill "$(cat /tmp/chatgpt-app.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload server log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-server-log
+          path: /tmp/chatgpt-app.log
+          if-no-files-found: ignore
+          retention-days: 14

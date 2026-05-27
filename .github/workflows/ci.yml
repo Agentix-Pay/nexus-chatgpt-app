@@ -5,14 +5,84 @@ on:
   push:
     branches: [master, main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  typecheck:
+    name: typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
+          cache: 'npm'
+
+      - run: npm ci
+
       - run: npm run typecheck
-      - run: npm test --if-present
+
+  unit-tests:
+    name: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Run unit tests
+        run: npm test
+        env:
+          CI: 'true'
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: |
+            **/test-results/**
+            **/junit*.xml
+            **/coverage/**
+          if-no-files-found: ignore
+          retention-days: 14
+
+  regression-tests:
+    name: regression-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Run @regression-tagged tests
+        # --passWithNoTests keeps the job green until @regression-tagged
+        # suites land (none today). Tag in the describe/it string:
+        #   it('handles edge case @regression', () => { ... })
+        run: npm run test:regression
+        env:
+          CI: 'true'
+
+      - name: Upload regression test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-test-results
+          path: |
+            **/test-results/**
+            **/junit*.xml
+          if-no-files-found: ignore
+          retention-days: 14
