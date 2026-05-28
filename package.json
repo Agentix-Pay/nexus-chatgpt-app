@@ -12,6 +12,8 @@
     "start": "node dist/server.js",
     "start:http": "node dist/server.js --transport=http",
     "test": "vitest run",
+    "test:regression": "vitest run --testNamePattern \"@regression\" --passWithNoTests",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
