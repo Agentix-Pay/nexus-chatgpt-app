@@ -1,10 +1,14 @@
 # See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
+#
+# ROLLBACK NET ONLY. During the Fly->AWS migration this is kept as a manual
+# escape hatch: AWS is the primary deploy target (see deploy-aws-*.yml). It no
+# longer auto-fires on branch pushes (the old `master` push trigger was dropped
+# when the default branch was renamed master->main and AWS became canonical).
+# Trigger by hand from the Actions tab if AWS Nexus needs to fall back to Fly.
 
 name: Fly Deploy
 on:
-  push:
-    branches:
-      - master
+  workflow_dispatch:
 jobs:
   deploy:
     name: Deploy app

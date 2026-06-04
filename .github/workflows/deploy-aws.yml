@@ -1,0 +1,121 @@
+name: Deploy Nexus ChatGPT App to AWS (reusable)
+
+# Reusable build+ship workflow for the Nexus ChatGPT App frontend. Builds this
+# repo's image, pushes it to ECR (immutable :env-<sha> + moving :env tags), then
+# SSM-runs /opt/agentix/remote-deploy-nexus.sh on the target EC2 host to redeploy
+# ONLY the nexus services into the existing per-env compose project. Auth to AWS
+# is keyless via GitHub OIDC (no stored AWS keys).
+#
+# This deploy does NOT ship the deploy bundle (compose file, Caddyfile,
+# remote-deploy*.sh) — that is owned by the agentix-pay-dashboard repo's deploy,
+# which syncs it to /opt/agentix on the box. A dashboard deploy for this env must
+# have run first (it seeds /opt/agentix/<env>/.deploy-env + compose); the remote
+# script fails loudly if that bootstrap is missing.
+#
+# Repo variables required (Settings -> Secrets and variables -> Actions -> Variables):
+#   AWS_DEPLOY_ROLE_ARN, AWS_REGION, ECR_REGISTRY
+
+on:
+  workflow_call:
+    inputs:
+      env:              { required: true,  type: string }  # dev | test | prod
+      gh_environment:   { required: true,  type: string }  # GitHub Environment (approval gate)
+      target_name_tag:  { required: true,  type: string }  # EC2 Name tag to deploy onto
+      nexus_host:       { required: true,  type: string }  # Caddy site address (ChatGPT App front)
+      nexus_api_host:   { required: true,  type: string }  # Caddy site address (Nexus core API)
+
+permissions:
+  id-token: write   # required for OIDC
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.gh_environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Compute image tags
+        id: tags
+        run: |
+          SHA=${GITHUB_SHA::12}
+          REG=${{ vars.ECR_REGISTRY }}
+          ENV=${{ inputs.env }}
+          {
+            echo "nexus_app_image=$REG/agentix-nexus-app:$ENV-$SHA"
+            echo "nexus_app_moving=$REG/agentix-nexus-app:$ENV"
+            # The sibling Nexus core image is built by the nexus repo.
+            # remote-deploy-nexus.sh brings up BOTH services, so reference its moving
+            # :env tag here (whatever is current) — pulling it is a no-op if unchanged.
+            echo "nexus_moving=$REG/agentix-nexus:$ENV"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push Nexus ChatGPT App image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.nexus_app_image }},${{ steps.tags.outputs.nexus_app_moving }}
+          cache-from: type=gha,scope=nexus-app-${{ inputs.env }}
+          cache-to: type=gha,mode=max,scope=nexus-app-${{ inputs.env }}
+
+      - name: Resolve target instance
+        id: target
+        run: |
+          IID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=${{ inputs.target_name_tag }}" \
+                      "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].InstanceId' --output text)
+          if [ -z "$IID" ] || [ "$IID" = "None" ]; then
+            echo "::error::No running EC2 instance with Name=${{ inputs.target_name_tag }}"
+            exit 1
+          fi
+          echo "instance_id=$IID" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy via SSM
+        env:
+          IID: ${{ steps.target.outputs.instance_id }}
+          APP_ENV: ${{ inputs.env }}
+          NEXUS_IMAGE: ${{ steps.tags.outputs.nexus_moving }}
+          NEXUS_APP_IMAGE: ${{ steps.tags.outputs.nexus_app_image }}
+          NEXUS_HOST: ${{ inputs.nexus_host }}
+          NEXUS_API_HOST: ${{ inputs.nexus_api_host }}
+        run: |
+          set -euo pipefail
+          REMOTE="test -f /opt/agentix/remote-deploy-nexus.sh \
+            && chmod +x /opt/agentix/remote-deploy-nexus.sh \
+            && APP_ENV=$APP_ENV NEXUS_IMAGE=$NEXUS_IMAGE NEXUS_APP_IMAGE=$NEXUS_APP_IMAGE \
+               NEXUS_HOST=$NEXUS_HOST NEXUS_API_HOST=$NEXUS_API_HOST \
+               bash /opt/agentix/remote-deploy-nexus.sh"
+          PARAMS=$(jq -n --arg c "$REMOTE" '{commands: [$c]}')
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$IID" \
+            --document-name AWS-RunShellScript \
+            --comment "deploy nexus-app $APP_ENV ${GITHUB_SHA::12}" \
+            --parameters "$PARAMS" \
+            --query 'Command.CommandId' --output text)
+          echo "SSM command: $CMD_ID (instance $IID)"
+          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$IID" || true
+          echo "================ remote stdout ================"
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$IID" \
+            --query 'StandardOutputContent' --output text
+          echo "================ remote stderr ================"
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$IID" \
+            --query 'StandardErrorContent' --output text
+          STATUS=$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$IID" \
+            --query 'Status' --output text)
+          echo "Remote status: $STATUS"
+          [ "$STATUS" = "Success" ]
