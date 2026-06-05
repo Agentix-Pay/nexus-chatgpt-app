@@ -1,0 +1,31 @@
+name: Deploy Nexus ChatGPT App to AWS — Prod
+
+# Deploy the Nexus ChatGPT App prod on a published GitHub release (mirrors the
+# dashboard repo's release->prod trigger, and the Fly deploy kept alive as a
+# rollback net during cutover). Co-located on the isolated prod box
+# (agentix-prod-app). The `production` GitHub Environment carries the
+# required-reviewer approval gate — the build runs, then waits for sign-off
+# before the SSM deploy step executes.
+
+on:
+  release:
+    types:
+      - published
+
+concurrency:
+  group: deploy-aws-nexus-app-prod
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy-aws.yml
+    with:
+      env: prod
+      gh_environment: production
+      target_name_tag: agentix-prod-app
+      nexus_host: nexus.agentixpay.ai
+      nexus_api_host: nexus-api.agentixpay.ai

@@ -1,0 +1,29 @@
+name: Deploy Nexus ChatGPT App to AWS — Test
+
+# Auto-deploy the Nexus ChatGPT App test on every push to the `staged` branch
+# (mirrors the dashboard repo's staged->test trigger). Runs on the SHARED EC2 box
+# (agentix-shared-app) as part of the agentix-test compose project. Public test
+# hostnames are reached via the Cloudflare Origin Rule that remaps :443 -> :8443.
+
+on:
+  push:
+    branches:
+      - staged
+
+concurrency:
+  group: deploy-aws-nexus-app-test
+  cancel-in-progress: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy-aws.yml
+    with:
+      env: test
+      gh_environment: test
+      target_name_tag: agentix-shared-app
+      nexus_host: nexus-test.agentixpay.ai
+      nexus_api_host: nexus-api-test.agentixpay.ai
