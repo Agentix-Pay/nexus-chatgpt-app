@@ -287,7 +287,7 @@ a:hover{text-decoration:underline}
       uptime: process.uptime(),
       version: '0.1.0',
       tools: tools.length,
-      nexusBaseUrl: process.env['NEXUS_BASE_URL'] ?? 'https://agentix-nexus.fly.dev',
+      nexusBaseUrl: process.env['NEXUS_BASE_URL'] ?? 'https://nexus-api.agentixpay.ai',
     });
   });
 
