@@ -20,7 +20,7 @@
 // AWS, or Fly during migration) advertises the host it's actually served from —
 // ChatGPT reads this into the widget iframe domain + CSP. Falls back to the Fly
 // host only if PUBLIC_BASE_URL is unset.
-const WIDGET_DOMAIN = process.env['PUBLIC_BASE_URL'] ?? 'https://agentix-nexus-app.fly.dev';
+const WIDGET_DOMAIN = process.env['PUBLIC_BASE_URL'] ?? 'https://nexus.agentixpay.ai';
 
 export const WIDGET_NAMES = [
   'merchant-list',
@@ -73,7 +73,7 @@ export function widgetMeta(): Record<string, unknown> {
     ui: {
       domain: WIDGET_DOMAIN,
       csp: {
-        connectDomains: [process.env['NEXUS_BASE_URL'] ?? 'https://agentix-nexus.fly.dev'],
+        connectDomains: [process.env['NEXUS_BASE_URL'] ?? 'https://nexus-api.agentixpay.ai'],
         // Image-host allowlist for product/category thumbnails.
         //
         // The OpenAI Apps SDK iframe CSP gates resource loads — anything not in
@@ -220,7 +220,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",syste
 // here so the iframe doesn't directly hit upstream image CDNs. Same-origin
 // to the widget's serving host, which sidesteps CSP + sandbox quirks that
 // were blocking direct loremflickr/Shopify-CDN loads.
-const IMG_PROXY_ORIGIN = process.env['PUBLIC_BASE_URL'] ?? 'https://agentix-nexus-app.fly.dev';
+const IMG_PROXY_ORIGIN = process.env['PUBLIC_BASE_URL'] ?? 'https://nexus.agentixpay.ai';
 
 const POSTMSG_LISTENER = `
 const root = document.getElementById('root');

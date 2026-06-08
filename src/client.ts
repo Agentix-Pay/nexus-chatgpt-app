@@ -11,7 +11,7 @@
  * payment), the JWT is required.
  */
 
-const BASE_URL = process.env['NEXUS_BASE_URL'] ?? 'https://agentix-nexus.fly.dev';
+const BASE_URL = process.env['NEXUS_BASE_URL'] ?? 'https://nexus-api.agentixpay.ai';
 
 // Hard-coded agent attribution. Every outbound call from this MCP App originates
 // from a shopper using ChatGPT (that's the host that connects to us). When a
