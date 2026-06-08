@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { nexus } from '../client.js';
+import { withCore } from '../mcp-client.js';
 import { inlineImages } from '../lib/inline-image.js';
 
 const inputSchema = z.object({
@@ -33,34 +33,32 @@ export const searchProductsTool = {
     input: z.infer<typeof inputSchema>,
     ctx: { jwt?: string; fallbackApiKey?: string },
   ) => {
-    const params = new URLSearchParams({
-      merchantId: input.merchantId,
-      page: String(input.page),
-      limit: String(input.limit),
-      ...(input.q && { q: input.q }),
-      ...(input.minPriceCents !== undefined && { minPrice: String(input.minPriceCents) }),
-      ...(input.maxPriceCents !== undefined && { maxPrice: String(input.maxPriceCents) }),
-      ...(input.category && { category: input.category }),
+    // Fetch products + the merchant's display name over one core-MCP
+    // connection — the cart widget needs merchantName for friendly display
+    // when an add_to_cart fires from a product tile in this grid.
+    const { productsRes, merchantName } = await withCore(ctx, async (call) => {
+      const [products, merchants] = await Promise.all([
+        call<{ data: Product[]; pagination: unknown }>('search_products', {
+          merchantId: input.merchantId,
+          page: input.page,
+          limit: input.limit,
+          ...(input.q ? { q: input.q } : {}),
+          ...(input.minPriceCents !== undefined ? { minPriceCents: input.minPriceCents } : {}),
+          ...(input.maxPriceCents !== undefined ? { maxPriceCents: input.maxPriceCents } : {}),
+          ...(input.category ? { category: input.category } : {}),
+        }),
+        call<{ data: Array<{ id: string; displayName: string }> }>('list_merchants', {}),
+      ]);
+      return {
+        productsRes: products,
+        merchantName: merchants.ok
+          ? merchants.data.data.find((m) => m.id === input.merchantId)?.displayName
+          : undefined,
+      };
     });
-    // Fetch products + the merchant's display name in parallel — the cart
-    // widget needs merchantName for friendly display when an add_to_cart
-    // fires from a product tile in this grid.
-    const [productsRes, merchantsRes] = await Promise.all([
-      nexus.get<{ data: Product[]; pagination: unknown }>(
-        `/acp/v1/products?${params.toString()}`,
-        { jwt: ctx.jwt, fallbackApiKey: ctx.fallbackApiKey },
-      ),
-      nexus.get<{ data: Array<{ id: string; displayName: string }> }>(
-        '/acp/v1/merchants',
-        { jwt: ctx.jwt, fallbackApiKey: ctx.fallbackApiKey },
-      ),
-    ]);
     if (!productsRes.ok) {
       return { error: { code: productsRes.code, message: productsRes.message } };
     }
-    const merchantName = merchantsRes.ok
-      ? merchantsRes.data.data.find((m) => m.id === input.merchantId)?.displayName
-      : undefined;
     // Inline the first image of each product as a data URL. The iframe was
     // rejecting all HTTP image loads regardless of CSP/proxy; data URLs need
     // no network call and render in any sandbox.

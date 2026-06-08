@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { nexus } from '../client.js';
+import { callCore } from '../mcp-client.js';
 
 export interface Merchant {
   id: string;
@@ -19,8 +19,9 @@ export const listMerchantsTool = {
     _input: Record<string, never>,
     ctx: { jwt?: string; fallbackApiKey?: string },
   ) => {
-    const result = await nexus.get<{ data: Merchant[]; pagination?: unknown }>(
-      '/acp/v1/merchants',
+    const result = await callCore<{ data: Merchant[]; pagination?: unknown }>(
+      'list_merchants',
+      {},
       { jwt: ctx.jwt, fallbackApiKey: ctx.fallbackApiKey },
     );
     if (!result.ok) {

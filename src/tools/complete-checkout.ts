@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { nexus } from '../client.js';
+import { callCore } from '../mcp-client.js';
 
 const inputSchema = z.object({
   checkoutId: z.string().min(1),
@@ -26,13 +26,13 @@ export const completeCheckoutTool = {
         },
       };
     }
-    const result = await nexus.post<{
+    const result = await callCore<{
       checkout: unknown;
       order: { orderNumber: string; totalCents: number };
       payment: { summary: string; mode: 'demo' | 'real'; method?: string; last4?: string };
     }>(
-      `/acp/v1/checkouts/${encodeURIComponent(input.checkoutId)}/complete`,
-      input.paymentToken ? { paymentToken: input.paymentToken } : {},
+      'complete_checkout',
+      { checkoutId: input.checkoutId, ...(input.paymentToken ? { paymentToken: input.paymentToken } : {}) },
       { jwt: ctx.jwt },
     );
     if (!result.ok) {

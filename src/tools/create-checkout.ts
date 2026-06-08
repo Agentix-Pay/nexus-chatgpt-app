@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { nexus } from '../client.js';
+import { callCore, AGENT_ID } from '../mcp-client.js';
 
 const inputSchema = z.object({
   merchantId: z.string().min(1),
@@ -26,9 +26,9 @@ export const createCheckoutTool = {
     input: z.infer<typeof inputSchema>,
     ctx: { jwt?: string; fallbackApiKey?: string },
   ) => {
-    const result = await nexus.post<unknown>(
-      '/acp/v1/checkouts',
-      input,
+    const result = await callCore<unknown>(
+      'create_checkout',
+      { ...input, agentId: AGENT_ID },
       { jwt: ctx.jwt, fallbackApiKey: ctx.fallbackApiKey },
     );
     if (!result.ok) {

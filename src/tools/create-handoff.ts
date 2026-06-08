@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { nexus } from '../client.js';
+import { withCore, AGENT_ID } from '../mcp-client.js';
 
 const inputSchema = z.object({
   merchantId: z.string().min(1),
@@ -26,25 +26,26 @@ export const createHandoffTool = {
     input: z.infer<typeof inputSchema>,
     ctx: { jwt?: string; fallbackApiKey?: string },
   ) => {
-    // Fetch handoff + merchant directory in parallel — handoff response doesn't
-    // include merchantName, so we look it up so the CheckoutLinkCard widget can
-    // render "<store name> · $X" instead of the generic "Merchant" fallback.
-    const [result, merchantsRes] = await Promise.all([
-      nexus.post<Record<string, unknown>>('/acp/v1/handoff', input, {
-        jwt: ctx.jwt,
-        fallbackApiKey: ctx.fallbackApiKey,
-      }),
-      nexus.get<{ data: Array<{ id: string; displayName: string }> }>(
-        '/acp/v1/merchants',
-        { jwt: ctx.jwt, fallbackApiKey: ctx.fallbackApiKey },
-      ),
-    ]);
+    // Fetch handoff + merchant directory over one core-MCP connection — the
+    // handoff response doesn't include merchantName, so we look it up so the
+    // CheckoutLinkCard widget renders "<store name> · $X" instead of the
+    // generic "Merchant" fallback. agentId attributes the order to ChatGPT in
+    // the dashboard "Source" column (core honors a caller-supplied agentId).
+    const { result, merchantName } = await withCore(ctx, async (call) => {
+      const [handoff, merchants] = await Promise.all([
+        call<Record<string, unknown>>('create_handoff', { ...input, agentId: AGENT_ID }),
+        call<{ data: Array<{ id: string; displayName: string }> }>('list_merchants', {}),
+      ]);
+      return {
+        result: handoff,
+        merchantName: merchants.ok
+          ? merchants.data.data.find((m) => m.id === input.merchantId)?.displayName
+          : undefined,
+      };
+    });
     if (!result.ok) {
       return { error: { code: result.code, message: result.message } };
     }
-    const merchantName = merchantsRes.ok
-      ? merchantsRes.data.data.find((m) => m.id === input.merchantId)?.displayName
-      : undefined;
     return {
       ...result.data,
       ...(merchantName ? { merchantName } : {}),

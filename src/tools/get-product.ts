@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { nexus } from '../client.js';
+import { withCore } from '../mcp-client.js';
 import { inlineImages } from '../lib/inline-image.js';
 
 const inputSchema = z.object({
@@ -17,24 +17,24 @@ export const getProductTool = {
     input: z.infer<typeof inputSchema>,
     ctx: { jwt?: string; fallbackApiKey?: string },
   ) => {
-    // Fetch product + merchant in parallel so the widget can decide which
-    // checkout buttons to render based on merchant.checkoutMode.
-    const [productRes, merchantsRes] = await Promise.all([
-      nexus.get<unknown>(
-        `/acp/v1/products/${encodeURIComponent(input.productId)}?merchantId=${encodeURIComponent(input.merchantId)}`,
-        { jwt: ctx.jwt, fallbackApiKey: ctx.fallbackApiKey },
-      ),
-      nexus.get<{ data: Array<{ id: string; displayName: string; platform: string; checkoutMode?: string; domain?: string }> }>(
-        '/acp/v1/merchants',
-        { jwt: ctx.jwt, fallbackApiKey: ctx.fallbackApiKey },
-      ),
-    ]);
+    // Fetch product + merchant over one core-MCP connection so the widget can
+    // decide which checkout buttons to render based on merchant.checkoutMode.
+    const { productRes, merchant } = await withCore(ctx, async (call) => {
+      const [product, merchants] = await Promise.all([
+        call<unknown>('get_product', { merchantId: input.merchantId, productId: input.productId }),
+        call<{ data: Array<{ id: string; displayName: string; platform: string; checkoutMode?: string; domain?: string }> }>(
+          'list_merchants',
+          {},
+        ),
+      ]);
+      return {
+        productRes: product,
+        merchant: merchants.ok ? merchants.data.data.find((m) => m.id === input.merchantId) : undefined,
+      };
+    });
     if (!productRes.ok) {
       return { error: { code: productRes.code, message: productRes.message } };
     }
-    const merchant = merchantsRes.ok
-      ? merchantsRes.data.data.find((m) => m.id === input.merchantId)
-      : undefined;
     const platform = merchant?.platform ?? 'UNKNOWN';
     const isMock = platform === 'MOCK';
     const mode = merchant?.checkoutMode ?? 'AUTO';
