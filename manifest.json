@@ -4,13 +4,13 @@
   "name": "Nexus Shopping",
   "shortName": "Nexus",
   "description": "Shop across AI-enabled stores. Browse products, compare prices, complete checkout with your card on file or via secure link — all inside ChatGPT.",
-  "iconUrl": "https://agentix-nexus.fly.dev/static/icon-512.png",
+  "iconUrl": "https://nexus.agentixpay.ai/static/icon-512.png",
   "categories": ["shopping", "commerce", "lifestyle"],
   "publisher": {
     "name": "Agentix",
     "url": "https://agentixpay.ai",
     "supportEmail": "support@agentixpay.ai",
-    "privacyPolicyUrl": "https://agentix-nexus.fly.dev/privacy"
+    "privacyPolicyUrl": "https://nexus.agentixpay.ai/privacy"
   },
   "auth": {
     "type": "none",
