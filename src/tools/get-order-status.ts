@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { nexus } from '../client.js';
+import { withCore } from '../mcp-client.js';
 
 const inputSchema = z.object({ orderId: z.string().min(1) });
 
@@ -13,26 +13,23 @@ export const getOrderStatusTool = {
     input: z.infer<typeof inputSchema>,
     ctx: { jwt?: string; fallbackApiKey?: string },
   ) => {
-    // Order + merchant directory in parallel — we surface merchantName in the
-    // confirmation card so the shopper sees which store they paid (matters
-    // most for the moment after secure-link checkout completes).
-    const [result, merchantsRes] = await Promise.all([
-      nexus.get<Record<string, unknown>>(
-        `/acp/v1/orders/${encodeURIComponent(input.orderId)}`,
-        { jwt: ctx.jwt, fallbackApiKey: ctx.fallbackApiKey },
-      ),
-      nexus.get<{ data: Array<{ id: string; displayName: string }> }>(
-        '/acp/v1/merchants',
-        { jwt: ctx.jwt, fallbackApiKey: ctx.fallbackApiKey },
-      ),
-    ]);
+    // Order + merchant directory over one core-MCP connection — we surface
+    // merchantName in the confirmation card so the shopper sees which store
+    // they paid (matters most right after secure-link checkout completes).
+    const { result, merchants } = await withCore(ctx, async (call) => {
+      const [order, dir] = await Promise.all([
+        call<Record<string, unknown>>('get_order', { orderId: input.orderId }),
+        call<{ data: Array<{ id: string; displayName: string }> }>('list_merchants', {}),
+      ]);
+      return { result: order, merchants: dir };
+    });
     if (!result.ok) {
       return { error: { code: result.code, message: result.message } };
     }
     const order = result.data as Record<string, unknown>;
     const merchantIdRaw = order['merchantId'];
-    const merchantName = merchantsRes.ok && typeof merchantIdRaw === 'string'
-      ? merchantsRes.data.data.find((m) => m.id === merchantIdRaw)?.displayName
+    const merchantName = merchants.ok && typeof merchantIdRaw === 'string'
+      ? merchants.data.data.find((m) => m.id === merchantIdRaw)?.displayName
       : undefined;
     return {
       order: {

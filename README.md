@@ -2,7 +2,7 @@
 
 The MCP-based ChatGPT App for Agentix Nexus. Provides inline shopping UX in ChatGPT (and any MCP-compatible host: Claude Desktop, Anthropic Apps, future agents): product cards, order summaries, payment confirmations, all rendered natively in chat.
 
-> **Status: works locally + tests pass + ready to deploy.** The MCP server runs over either stdio or SSE/HTTP. All 7 tools are wired against the live Nexus API. UI components return polished HTML (matched to the `agentixpay.ai/pay/[id]` Flow B page). Boots in HTTP mode with manifest, health check, and SSE endpoints exposed. OpenAI Apps platform registration is the remaining work that depends on their publisher dashboard access.
+> **Status: works locally + tests pass + ready to deploy.** The MCP server runs over either stdio or SSE/HTTP. The commerce tools **delegate to the core Nexus MCP server** (`<NEXUS_BASE_URL>/mcp`) — one tool implementation, every host (AGX-158); this app keeps only the presentation layer + per-conversation cart. UI components return polished HTML (matched to the `agentixpay.ai/pay/[id]` Flow B page). Boots in HTTP mode with manifest, health check, and SSE endpoints exposed. OpenAI Apps platform registration is the remaining work that depends on their publisher dashboard access.
 
 See [docs/10-chatgpt-app.md](https://github.com/Agentix-Pay/nexus/blob/master/docs/10-chatgpt-app.md) in the nexus repo for the full architecture, payment integration plan, and roadmap.
 
@@ -18,17 +18,18 @@ ChatGPT / Claude Desktop / any MCP host
        ▼  MCP (stdio or SSE)
 ┌──────────────────────────────────────┐
 │ nexus-chatgpt-app                    │
-│  ├── src/server.ts        ← MCP server, stdio + SSE transports
-│  ├── src/tools/*          ← 7 tools mapped 1:1 to /acp/v1/* endpoints
-│  ├── src/components/      ← 8 inline UI renderers (HTML)
-│  └── src/client.ts        ← Thin HTTP client to Nexus API
+│  ├── src/server.ts        ← MCP server (to ChatGPT), stdio + SSE/HTTP
+│  ├── src/tools/*          ← tools: catalog/checkout/order delegate to core
+│  │                          MCP; cart tools (add/view/checkout) are local
+│  ├── src/components/      ← inline UI renderers (HTML)
+│  └── src/mcp-client.ts    ← MCP client to the core Nexus /mcp server
 └──────────────┬───────────────────────┘
-               │  HTTPS + Bearer JWT (per-shopper)
+               │  MCP (Streamable HTTP) + Bearer JWT/key (per-shopper)
                ▼
-       Nexus API (nexus-api.agentixpay.ai)
+       Core Nexus MCP server (<NEXUS_BASE_URL>/mcp)
 ```
 
-Same Nexus backend the Custom GPT calls. The App is a thin MCP wrapper that adds inline UI rendering.
+Same Nexus backend the Custom GPT calls — but reached over MCP, not REST. The App is a thin **MCP proxy** that adds inline UI rendering + a per-conversation cart on top of the core commerce tools.
 
 ## Run locally
 

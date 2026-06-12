@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { nexus } from '../client.js';
+import { callCore } from '../mcp-client.js';
 
 const inputSchema = z.object({
   merchantId: z.string().min(1).describe('The merchant whose categories to list. Get this from list_merchants.'),
@@ -22,8 +22,9 @@ export const listCategoriesTool = {
     input: z.infer<typeof inputSchema>,
     ctx: { jwt?: string; fallbackApiKey?: string },
   ) => {
-    const result = await nexus.get<{ data: Category[] }>(
-      `/acp/v1/categories?merchantId=${encodeURIComponent(input.merchantId)}`,
+    const result = await callCore<{ data: Category[] }>(
+      'list_categories',
+      { merchantId: input.merchantId },
       { jwt: ctx.jwt, fallbackApiKey: ctx.fallbackApiKey },
     );
     if (!result.ok) {

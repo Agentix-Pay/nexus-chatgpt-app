@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { nexus } from '../client.js';
+import { callCore, AGENT_ID } from '../mcp-client.js';
 import { cartSummary, clearCart } from '../lib/cart.js';
 
 const inputSchema = z.object({
@@ -27,12 +27,13 @@ export const checkoutCartTool = {
         },
       };
     }
-    const result = await nexus.post<Record<string, unknown>>(
-      '/acp/v1/handoff',
+    const result = await callCore<Record<string, unknown>>(
+      'create_handoff',
       {
         merchantId: summary.merchantId,
         items: summary.items.map((it) => ({ productId: it.productId, sku: it.sku, quantity: it.quantity })),
         ...(input.email ? { email: input.email } : {}),
+        agentId: AGENT_ID,
       },
       { jwt: ctx.jwt, fallbackApiKey: ctx.fallbackApiKey },
     );
