@@ -70,7 +70,7 @@ Drop this into `~/Library/Application Support/Claude/claude_desktop_config.json`
       "args": ["/absolute/path/to/nexus-chatgpt-app/dist/server.js"],
       "env": {
         "NEXUS_FALLBACK_API_KEY": "nexus_xxx",
-        "NEXUS_BASE_URL": "https://agentix-nexus.fly.dev"
+        "NEXUS_BASE_URL": "https://nexus-api.agentixpay.ai"
       }
     }
   }
@@ -141,23 +141,29 @@ it('escapes script tags in user input @regression', () => { /* ... */ });
 
 ## Deploy
 
-A `fly.toml` is included for hosting on Fly.io. The HTTP transport listens on `:4400` and serves:
+Deploys run on **AWS via GitHub Actions** (Fly.io was decommissioned June 2026).
+The image is built and pushed to ECR, then SSM-run onto the shared EC2 host into
+the per-env compose project (`.github/workflows/deploy-aws-*.yml`):
+
+- push to `main` → **dev** (`nexus-dev.agentixpay.ai`)
+- push to `staged` → **test** (`nexus-test.agentixpay.ai`)
+- publish a GitHub release → **prod** (`nexus.agentixpay.ai`)
+
+The container's HTTP transport listens on `:4400` (behind Caddy/Cloudflare) and serves:
 
 - `GET /manifest.json` — public App manifest (cached 5 min)
-- `GET /healthz` — health check (used by Fly load balancer)
+- `GET /healthz` — health check (used by the compose healthcheck + Caddy)
 - `GET /mcp/sse` — MCP Server-Sent Events endpoint (ChatGPT Apps connect here)
 - `POST /mcp/messages?sessionId=…` — message channel for the SSE session
 
-```bash
-fly launch --copy-config --no-deploy --name agentix-nexus-app
-fly secrets set NEXUS_FALLBACK_API_KEY=nexus_xxx --app agentix-nexus-app
-fly deploy --app agentix-nexus-app
-```
+Runtime env (`NEXUS_BASE_URL`, `PUBLIC_BASE_URL`, `NEXUS_FALLBACK_API_KEY`) is set
+by the deploy bundle in the `agentix-pay-dashboard` repo
+(`infra/aws/deploy/docker-compose.aws.yml` + the `agentix/<env>/nexus-app` secret).
 
-Once deployed at e.g. `https://agentix-nexus-app.fly.dev`, point the OpenAI Apps publisher manifest at:
-- App URL: `https://agentix-nexus-app.fly.dev`
-- MCP endpoint: `https://agentix-nexus-app.fly.dev/mcp/sse`
-- Manifest: `https://agentix-nexus-app.fly.dev/manifest.json`
+Point the OpenAI Apps publisher manifest at the per-env public host, e.g. prod:
+- App URL: `https://nexus.agentixpay.ai`
+- MCP endpoint: `https://nexus.agentixpay.ai/mcp/sse`
+- Manifest: `https://nexus.agentixpay.ai/manifest.json`
 
 ## What still needs the OpenAI side
 
@@ -168,7 +174,7 @@ Once deployed at e.g. `https://agentix-nexus-app.fly.dev`, point the OpenAI Apps
 | Manifest + health endpoints | ✅ Done |
 | Tests | ✅ Done (15/15 passing) |
 | Local Claude Desktop sanity check | ✅ Works |
-| Fly hosting config | ✅ Done |
+| AWS hosting (ECR + EC2/compose via GitHub Actions) | ✅ Done |
 | Apply for OpenAI Apps publisher access | ⏳ Pending OpenAI flow |
 | Submit manifest for review | ⏳ Pending |
 | Apple Pay / Shop Pay payment-sheet primitives | ⏳ Pending OpenAI Apps SDK docs |
@@ -180,7 +186,6 @@ Once deployed at e.g. `https://agentix-nexus-app.fly.dev`, point the OpenAI Apps
 nexus-chatgpt-app/
 ├── manifest.json              # ChatGPT App manifest (OAuth, MCP endpoint, UI components)
 ├── Dockerfile                 # Multi-stage Node 20 alpine build
-├── fly.toml                   # Fly.io config — HTTP transport on :4400
 ├── package.json               # express + @modelcontextprotocol/sdk + zod
 ├── src/
 │   ├── server.ts              # MCP server entry — stdio + SSE/HTTP transports
