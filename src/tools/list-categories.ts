@@ -30,10 +30,6 @@ export const listCategoriesTool = {
     if (!result.ok) {
       return { error: { code: result.code, message: result.message } };
     }
-    // Category tiles are now text-only on a gradient (no images), so we no
-    // longer inline c.sampleImage. Saves the per-call inline overhead and
-    // shrinks the tool payload to a few hundred bytes — categories render
-    // noticeably faster on cold and warm.
     return { merchantId: input.merchantId, categories: result.data.data };
   },
 };
