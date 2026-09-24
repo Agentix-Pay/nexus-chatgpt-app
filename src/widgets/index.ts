@@ -467,11 +467,17 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
         const tiles = merchants.map(m => {
           const id = m.id || '';
           const name = m.displayName || '';
+          const logo = m.logo || '';
           const args = JSON.stringify({merchantId:id}).replace(/"/g,'&quot;');
           // Mentioning "categories" explicitly is load-bearing — without it the
           // GPT routes "Browse <name>" back to list_merchants instead of
           // list_categories. The tool description lists this exact trigger phrase.
           const prompt = escapeHtml('Show me categories at ' + name);
+          // Same real-<img>-with-onerror pattern as renderProducts below — CSP
+          // blocks/404s hide the img cleanly, exposing the gradient underneath.
+          const logoTag = logo
+            ? '<img src="' + escapeHtml(proxyImg(logo)) + '" alt="" loading="lazy" onerror="this.style.display=&quot;none&quot;" style="width:100%;height:100%;object-fit:cover;pointer-events:none;">'
+            : '';
           // Customer-facing view — show only the store name and the Browse CTA.
           // Domain (e.g. "mall-of-toys.example.com") and platform (e.g. "MOCK"
           // or "SHOPIFY") are admin-tier metadata that don't belong in a
@@ -481,7 +487,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
                  data-call-tool="list_categories"
                  data-args="\${args}"
                  data-prompt="\${prompt}">
-              <div class="nx-tile-img"></div>
+              <div class="nx-tile-img">\${logoTag}</div>
               <div class="nx-tile-body">
                 <p class="nx-tile-title">\${escapeHtml(name)}</p>
               </div>
@@ -503,17 +509,24 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           const argsObj = {merchantId, category: c.name, limit: 24};
           const args = JSON.stringify(argsObj).replace(/"/g,'&quot;');
           const prompt = escapeHtml('Show me ' + (c.name || '') + ' products');
-          // Text-only category tiles — no images, no emoji. Drops the inline
-          // overhead entirely and keeps the tool payload tiny.
-          const tileStyle = 'background:linear-gradient(135deg,#BAE6FD,#DDD6FE);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:16px;';
+          // sampleImage is the first in-category product that actually has a
+          // real photo (getCategories skips products with no image — see
+          // nexus/src/adapters/mock.ts). Same real-<img>-with-onerror pattern
+          // as renderProducts — falls back to the plain gradient if empty.
+          const sampleImg = c.sampleImage || '';
+          const imgTag = sampleImg
+            ? '<img src="' + escapeHtml(proxyImg(sampleImg)) + '" alt="" loading="lazy" onerror="this.style.display=&quot;none&quot;" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;opacity:0.55;">'
+            : '';
+          const tileStyle = 'position:relative;overflow:hidden;background:linear-gradient(135deg,#BAE6FD,#DDD6FE);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:16px;';
           return \`
             <div class="nx-cat" role="button" tabindex="0"
                  style="\${tileStyle}"
                  data-call-tool="search_products"
                  data-args="\${args}"
                  data-prompt="\${prompt}">
-              <p style="font-size:15px;font-weight:600;color:#0F172A;margin:0 0 4px;line-height:1.25;">\${safeName}</p>
-              <p style="font-size:11px;font-weight:500;color:#475569;margin:0;">\${c.productCount || 0} \${c.productCount === 1 ? 'item' : 'items'}</p>
+              \${imgTag}
+              <p style="position:relative;font-size:15px;font-weight:600;color:#0F172A;margin:0 0 4px;line-height:1.25;">\${safeName}</p>
+              <p style="position:relative;font-size:11px;font-weight:500;color:#475569;margin:0;">\${c.productCount || 0} \${c.productCount === 1 ? 'item' : 'items'}</p>
             </div>\`;
         }).join('');
         root.innerHTML = '<div class="nx-card">' +

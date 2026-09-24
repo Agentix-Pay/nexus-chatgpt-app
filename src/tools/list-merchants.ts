@@ -7,6 +7,7 @@ export interface Merchant {
   domain: string;
   platform: string;
   checkoutMode?: string;
+  logo?: string | null;
 }
 
 export const listMerchantsTool = {
@@ -33,6 +34,7 @@ export const listMerchantsTool = {
       id: m.id,
       displayName: m.displayName,
       checkoutMode: m.checkoutMode,
+      logo: m.logo ?? undefined,
     }));
     return { merchants };
   },
