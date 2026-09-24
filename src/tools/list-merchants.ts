@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { callCore } from '../mcp-client.js';
+import { inlineImage } from '../lib/inline-image.js';
 
 export interface Merchant {
   id: string;
@@ -30,12 +31,17 @@ export const listMerchantsTool = {
     }
     // Strip technical fields before returning to the GPT — keeps them out of
     // text responses even if the GPT ignores the description's UI note.
-    const merchants = result.data.data.map((m) => ({
-      id: m.id,
-      displayName: m.displayName,
-      checkoutMode: m.checkoutMode,
-      logo: m.logo ?? undefined,
-    }));
+    // Logo is inlined as a data URL (same as product/category images) — the
+    // iframe can reject plain HTTP image loads regardless of CSP/proxy, so
+    // embedding the bytes directly sidesteps that instead of relying on it.
+    const merchants = await Promise.all(
+      result.data.data.map(async (m) => ({
+        id: m.id,
+        displayName: m.displayName,
+        checkoutMode: m.checkoutMode,
+        logo: m.logo ? await inlineImage(m.logo) : undefined,
+      })),
+    );
     return { merchants };
   },
 };

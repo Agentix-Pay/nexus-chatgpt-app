@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { callCore } from '../mcp-client.js';
+import { inlineImage } from '../lib/inline-image.js';
 
 const inputSchema = z.object({
   merchantId: z.string().min(1).describe('The merchant whose categories to list. Get this from list_merchants.'),
@@ -30,6 +31,15 @@ export const listCategoriesTool = {
     if (!result.ok) {
       return { error: { code: result.code, message: result.message } };
     }
-    return { merchantId: input.merchantId, categories: result.data.data };
+    // sampleImage inlined as a data URL — same rationale as list_merchants'
+    // logo and search_products' product images: sidesteps the iframe
+    // rejecting plain HTTP image loads regardless of CSP/proxy.
+    const categories = await Promise.all(
+      result.data.data.map(async (c) => ({
+        ...c,
+        sampleImage: c.sampleImage ? await inlineImage(c.sampleImage) : c.sampleImage,
+      })),
+    );
+    return { merchantId: input.merchantId, categories };
   },
 };

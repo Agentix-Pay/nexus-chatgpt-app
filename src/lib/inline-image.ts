@@ -33,6 +33,7 @@ const ALLOW = [
   /^https:\/\/[^/]+\.s3\.amazonaws\.com\//,
   /^https:\/\/s3\.amazonaws\.com\//,
   /^https:\/\/images\.unsplash\.com\//,
+  /^https:\/\/plus\.unsplash\.com\//,
 ];
 
 /**
@@ -48,6 +49,23 @@ function rewriteForSize(url: string): string {
   // → postMessage → iframe render. Still ≥ tile display size on most screens.
   const lf = url.match(/^(https:\/\/loremflickr\.com\/)\d+\/\d+(\/.+)$/);
   if (lf) return `${lf[1]}200/200${lf[2]}`;
+  // Unsplash (images.unsplash.com / plus.unsplash.com): the curated real
+  // photos were sourced with a full-size w=3000 param (for display quality
+  // wherever they were originally found) — fetched and base64-inlined as-is,
+  // that produced a ~1.2 MILLION character data URL for a single product
+  // image, which the ChatGPT plugin silently dropped rather than render.
+  // Unsplash's own imgix-style params support arbitrary resizing, so rewrite
+  // down to actual tile size before fetching, same principle as loremflickr.
+  if (/^https:\/\/(images|plus)\.unsplash\.com\//.test(url)) {
+    try {
+      const u = new URL(url);
+      u.searchParams.set('w', '300');
+      u.searchParams.set('q', '60');
+      return u.toString();
+    } catch {
+      return url;
+    }
+  }
   // Shopify CDN supports size suffixes — most product image URLs are like
   // https://cdn.shopify.com/.../image.jpg → image_400x400.jpg
   // We don't blanket-rewrite Shopify because their URLs encode size differently
