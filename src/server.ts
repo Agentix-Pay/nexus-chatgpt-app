@@ -15,12 +15,14 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { prewarmImageCache } from './lib/prewarm.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
+  isInitializeRequest,
   type CallToolRequest,
 } from '@modelcontextprotocol/sdk/types.js';
 import { WIDGET_NAMES, widgetUri, widgetHtml, widgetMeta, type WidgetName } from './widgets/index.js';
@@ -28,6 +30,7 @@ import express from 'express';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { randomUUID } from 'crypto';
 import { tools } from './tools/index.js';
 import {
   renderError,
@@ -232,6 +235,7 @@ async function startStdio() {
 
 async function startHttp(port: number) {
   const app = express();
+  app.use(express.json());
 
   // ── Root landing page (so visitors don't 404) ──
   app.get('/', (_req, res) => {
@@ -261,8 +265,9 @@ a:hover{text-decoration:underline}
   <ul class="endpoints">
     <li><code>GET /healthz</code> <span class="tag">200 OK</span></li>
     <li><code>GET /manifest.json</code> <span class="tag">App manifest</span></li>
-    <li><code>GET /mcp/sse</code> <span class="tag">MCP SSE</span></li>
-    <li><code>POST /mcp/messages?sessionId=…</code> <span class="tag">MCP messages</span></li>
+    <li><code>POST/GET/DELETE /mcp</code> <span class="tag">MCP Streamable HTTP</span></li>
+    <li><code>GET /mcp/sse</code> <span class="tag">MCP SSE (legacy)</span></li>
+    <li><code>POST /mcp/messages?sessionId=…</code> <span class="tag">MCP messages (legacy)</span></li>
   </ul>
   <p class="muted" style="margin-top:24px;font-size:13px">Source: <a href="https://github.com/Agentix-Pay/nexus-chatgpt-app">github.com/Agentix-Pay/nexus-chatgpt-app</a></p>
 </div></body></html>`);
@@ -364,7 +369,60 @@ a:hover{text-decoration:underline}
     res.status(404).json({ error: 'OAuth not required for this App' });
   });
 
-  // ── MCP over SSE ──────────────────────────────────────────
+  // ── MCP Streamable HTTP (current spec) — single endpoint, session via the
+  // `Mcp-Session-Id` header. This is what OpenAI's Apps/plugin platform
+  // requires (POST /mcp returns 404 on the legacy-SSE-only setup — see
+  // AGX-? plugin migration notes). Mirrors nexus's own mcpRouter.ts pattern.
+  const httpSessions = new Map<string, StreamableHTTPServerTransport>();
+
+  app.post('/mcp', async (req, res) => {
+    try {
+      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+      let transport = sessionId ? httpSessions.get(sessionId) : undefined;
+
+      if (!transport) {
+        if (sessionId || !isInitializeRequest(req.body)) {
+          res.status(400).json({ error: 'Provide Mcp-Session-Id or send an initialize request' });
+          return;
+        }
+        transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => randomUUID(),
+          onsessioninitialized: (sid: string) => {
+            httpSessions.set(sid, transport as StreamableHTTPServerTransport);
+            process.stderr.write(`[agentix-nexus] Streamable HTTP session opened: ${sid}\n`);
+          },
+        });
+        transport.onclose = () => {
+          if (transport?.sessionId) httpSessions.delete(transport.sessionId);
+        };
+        // Per-session server so the sessionId can be threaded into tool ctx —
+        // needed for the cart store, same as the legacy SSE path below.
+        const server = buildServer({ sessionId: transport.sessionId });
+        await server.connect(transport);
+      }
+
+      await transport.handleRequest(req, res, req.body);
+    } catch (err) {
+      console.error('MCP POST /mcp error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'MCP request failed' });
+      }
+    }
+  });
+
+  const httpSessionRequest = async (req: express.Request, res: express.Response) => {
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    const transport = sessionId ? httpSessions.get(sessionId) : undefined;
+    if (!transport) {
+      res.status(404).json({ error: 'Unknown or expired MCP session' });
+      return;
+    }
+    await transport.handleRequest(req, res);
+  };
+  app.get('/mcp', httpSessionRequest);
+  app.delete('/mcp', httpSessionRequest);
+
+  // ── MCP over legacy SSE (GET /mcp/sse + POST /mcp/messages) ────────────
   // Map of session-id → transport so multiple concurrent MCP clients work.
   const transports = new Map<string, SSEServerTransport>();
 
@@ -388,7 +446,8 @@ a:hover{text-decoration:underline}
       res.status(404).json({ error: 'Unknown sessionId' });
       return;
     }
-    await transport.handlePostMessage(req, res);
+    // express.json() already parsed the body, so hand it to the transport.
+    await transport.handlePostMessage(req, res, req.body);
   });
 
   app.listen(port, () => {
@@ -396,7 +455,8 @@ a:hover{text-decoration:underline}
       `[agentix-nexus] MCP HTTP server on :${port}\n` +
         `  Manifest:  http://localhost:${port}/manifest.json\n` +
         `  Health:    http://localhost:${port}/healthz\n` +
-        `  MCP SSE:   http://localhost:${port}/mcp/sse\n` +
+        `  MCP:       http://localhost:${port}/mcp (Streamable HTTP)\n` +
+        `  MCP SSE:   http://localhost:${port}/mcp/sse (legacy)\n` +
         `  Tools:     ${tools.length}\n`,
     );
     // Fire-and-forget pre-warm of the image cache. Errors are swallowed
