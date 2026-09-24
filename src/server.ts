@@ -309,6 +309,12 @@ a:hover{text-decoration:underline}
   const IMG_PROXY_ALLOWLIST = [
     /^https:\/\/loremflickr\.com\//,
     /^https:\/\/[^/]+\.flickr\.com\//,
+    // loremflickr's upstream started rejecting our server-side proxy fetches
+    // with 401 (likely bot/hotlink protection — no browser-like headers on a
+    // server-to-server request). mock.ts now generates dummyimage.com URLs
+    // instead; kept loremflickr above for any legacy/cached URLs still in
+    // flight.
+    /^https:\/\/dummyimage\.com\//,
     /^https:\/\/cdn\.shopify\.com\//,
     /^https:\/\/[^/]+\.shopifycdn\.com\//,
     /^https:\/\/i[0-9]\.wp\.com\//,
