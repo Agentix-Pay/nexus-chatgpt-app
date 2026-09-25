@@ -251,21 +251,36 @@ function fmt(c){
   catch(e){return (__currency==='USD'?'$':__currency+' ')+(Number(c)/100).toFixed(2);}
 }
 function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-// Call another tool from inside the widget. Tries every plausible API surface
-// the host might expose. Falls through to a follow-up prompt, then postMessage,
-// then a visible debug overlay if everything failed.
-// Strategy: sendFollowUpMessage creates a new turn (which is what we want for
-// navigation between widget types). Per host limitation, the prompt routes
-// through the agent — so prompts must be UNAMBIGUOUS, naming the exact tool.
+// Call another tool from inside the widget. Invokes window.openai.callTool
+// directly and renders whatever comes back — this is a real MCP tools/call,
+// not a chat message. sendFollowUpMessage is a LAST-RESORT fallback only
+// (host has no callTool at all, or the call itself threw synchronously):
+// it posts a component-authored chat message that the model is free to
+// interpret or decline, which is why buttons routed through it alone were
+// unreliable — a click isn't the same as an instruction from the user.
+// Checkout tools can still surface any host-required approval; that happens
+// inside the callTool promise (the host pauses/blocks it there), we just
+// await and render whatever result or error comes back.
 function callTool(name,args,fallbackPrompt){
   const o=window.openai;
   if(!o)return;
+  if(name&&typeof o.callTool==='function'){
+    try{
+      const p=o.callTool(name,args||{});
+      if(p&&typeof p.then==='function'){
+        p.then((res)=>{
+          const payload=(res&&(res.structuredContent||res.toolOutput||res.content))||res;
+          if(payload)safeRender(payload);
+        }).catch((err)=>{
+          safeRender({error:{message:String((err&&err.message)||err||'Tool call failed')}});
+        });
+      }
+      return;
+    }catch(e){}
+  }
+  // Only reached if callTool is unavailable or threw synchronously.
   if(typeof o.sendFollowUpMessage==='function'&&fallbackPrompt){
     try{o.sendFollowUpMessage({prompt:fallbackPrompt});return;}catch(e){}
-  }
-  // Only fall through to callTool if we have a tool name and no follow-up worked
-  if(name&&typeof o.callTool==='function'){
-    try{o.callTool(name,args||{});}catch(e){}
   }
 }
 // (API inspector removed — debug surfaced what we needed, see git history.)
