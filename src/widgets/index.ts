@@ -43,18 +43,28 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 14;
+const WIDGET_VERSION = 15;
 
 /** Map a tool's outputUI value to its widget URI. */
 export function widgetUri(outputUI: string): string {
-  // Three browsing tools (list_merchants, list_categories, search_products) all
-  // render through the same widget so navigation between merchants → categories
-  // → products happens in-place. The widget detects which data shape arrived
-  // and renders the right view.
+  // list_merchants, list_categories, and search_products each get their OWN
+  // resource URI (merchant-list / category-grid / product-grid) even though
+  // the HTML/JS is functionally equivalent (all three detect the data shape
+  // and can render any of the three views). They used to share a single
+  // 'merchant-list' URI so in-place navigation felt seamless — but when the
+  // model calls two of these tools in the same turn (e.g. list_merchants then
+  // search_products, both for one user message), ChatGPT mounts two iframes
+  // against the IDENTICAL resourceUri, and the second one has been observed
+  // rendering the first's (or no) data — surfacing as a bogus "No stores
+  // available right now" under real, populated search results. Giving each
+  // tool its own URI stops ChatGPT from conflating those two iframes. A
+  // button click still updates in place because that's driven by the SAME
+  // mounted iframe calling window.openai.callTool directly (see callTool()
+  // in the widget JS), not by resourceUri sharing.
   const map: Record<string, WidgetName> = {
     MerchantList: 'merchant-list',
-    CategoryGrid: 'merchant-list',   // ← shares the merchant-list widget
-    ProductGrid: 'merchant-list',    // ← shares the merchant-list widget
+    CategoryGrid: 'category-grid',
+    ProductGrid: 'product-grid',
     ProductDetailCard: 'product-detail',
     OrderSummary: 'order-summary',
     PaymentSheet: 'payment-sheet',
