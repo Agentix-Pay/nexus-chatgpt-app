@@ -195,8 +195,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",syste
 .nx-btn-primary{background:linear-gradient(135deg,#67E8F9,#818CF8 50%,#C084FC);color:#0B0F2A;box-shadow:0 1px 2px rgba(15,23,42,.10),0 8px 22px rgba(129,140,248,.25);}
 .nx-btn-primary:hover{filter:brightness(1.04);box-shadow:0 1px 2px rgba(15,23,42,.10),0 12px 30px rgba(129,140,248,.32);}
 .nx-btn-primary:active{transform:scale(.99);}
-.nx-btn-secondary{background:#fff;color:#0F172A;border:1px solid #E2E8F0;}
-.nx-btn-secondary:hover{border-color:#818CF8;background:#F8FAFC;}
+.nx-btn-secondary{background:#DBEAFE;color:#1E3A8A;border:1px solid #93C5FD;}
+.nx-btn-secondary:hover{border-color:#60A5FA;background:#BFDBFE;}
 .nx-btn-secondary:active{transform:scale(.99);}
 .nx-btn:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(129,140,248,.30);}
 .nx-btn-chatgpt-pay{background:#000;color:#fff;}
