@@ -128,7 +128,7 @@ describe('renderCheckoutLinkCard', () => {
 });
 
 describe('renderOrderConfirmation', () => {
-  it('shows demo banner in demo mode', () => {
+  it('omits demo banner in demo mode too (banner removed)', () => {
     const html = renderOrderConfirmation({
       orderNumber: 'ORD-123',
       totalCents: 5998,
@@ -136,7 +136,7 @@ describe('renderOrderConfirmation', () => {
       mode: 'demo',
       merchantName: 'Mall of Toys',
     });
-    expect(html).toContain('Demo mode');
+    expect(html).not.toContain('Demo mode');
     expect(html).toContain('Charged $59.98');
     expect(html).toContain('ORD-123');
   });
