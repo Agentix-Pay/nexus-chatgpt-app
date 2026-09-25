@@ -137,9 +137,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",syste
 .nx-totals-row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#475569;}
 .nx-grand{margin-top:6px;padding-top:10px;border-top:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:baseline;}
 .nx-grand-label{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:#0F172A;}
-.nx-grand-amount{font-size:26px;font-weight:700;background:linear-gradient(135deg,#67E8F9,#818CF8 50%,#C084FC);-webkit-background-clip:text;background-clip:text;color:transparent;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+.nx-grand-amount{font-size:26px;font-weight:700;background:linear-gradient(135deg,#3853E6,#1E3A8A);-webkit-background-clip:text;background-clip:text;color:transparent;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
 .nx-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px 18px;border-radius:10px;background:#0F172A;color:#fff;font-size:15px;font-weight:600;text-decoration:none;margin-top:14px;border:0;cursor:pointer;font-family:inherit;}
-.nx-button-gradient{background:linear-gradient(135deg,#67E8F9,#818CF8 50%,#C084FC);}
+.nx-button-gradient{background:linear-gradient(135deg,#3853E6,#1E3A8A);}
 .nx-button:hover{filter:brightness(1.05);}
 .nx-pill{display:inline-block;padding:3px 8px;border-radius:999px;background:#F1F5F9;color:#475569;font-size:11px;font-weight:500;}
 .nx-pill-success{background:#D1FAE5;color:#065F46;}
@@ -192,8 +192,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",syste
 .nx-btn{display:flex;align-items:center;justify-content:space-between;width:100%;padding:13px 16px;border-radius:10px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;border:0;transition:transform .1s,box-shadow .15s,filter .15s;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;}
 .nx-btn *{pointer-events:none;}
 .nx-btn-meta{font-size:11px;font-weight:500;opacity:.7;letter-spacing:.2px;}
-.nx-btn-primary{background:linear-gradient(135deg,#67E8F9,#818CF8 50%,#C084FC);color:#0B0F2A;box-shadow:0 1px 2px rgba(15,23,42,.10),0 8px 22px rgba(129,140,248,.25);}
-.nx-btn-primary:hover{filter:brightness(1.04);box-shadow:0 1px 2px rgba(15,23,42,.10),0 12px 30px rgba(129,140,248,.32);}
+.nx-btn-primary{background:linear-gradient(135deg,#3853E6,#1E3A8A);color:#fff;box-shadow:0 1px 2px rgba(15,23,42,.10),0 8px 22px rgba(56,83,230,.25);}
+.nx-btn-primary:hover{filter:brightness(1.04);box-shadow:0 1px 2px rgba(15,23,42,.10),0 12px 30px rgba(56,83,230,.32);}
 .nx-btn-primary:active{transform:scale(.99);}
 .nx-btn-secondary{background:#DBEAFE;color:#1E3A8A;border:1px solid #93C5FD;}
 .nx-btn-secondary:hover{border-color:#60A5FA;background:#BFDBFE;}
@@ -609,7 +609,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
                           data-call-tool="add_to_cart" data-args="\${addCartArgs}" data-prompt="\${addCartPrompt}" title="Add to cart">＋ Add</button>
                   <button style="flex:1;padding:6px 4px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid #E2E8F0;background:#fff;color:#475569;cursor:pointer;pointer-events:auto;font-family:inherit;"
                           data-call-tool="get_product" data-args="\${args}" data-prompt="\${prompt}" title="View details">Details</button>
-                  <button style="flex:1;padding:6px 4px;font-size:11px;font-weight:700;border-radius:6px;border:0;background:linear-gradient(135deg,#67E8F9,#818CF8 50%,#C084FC);color:#0B0F2A;cursor:pointer;pointer-events:auto;font-family:inherit;"
+                  <button style="flex:1;padding:6px 4px;font-size:11px;font-weight:700;border-radius:6px;border:0;background:linear-gradient(135deg,#3853E6,#1E3A8A);color:#fff;cursor:pointer;pointer-events:auto;font-family:inherit;"
                           data-call-tool="create_handoff" data-args="\${handoffArgs}" data-prompt="\${buyPrompt}" title="Checkout">↗ Buy</button>
                 </div>
               </div>
@@ -749,7 +749,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
                    ' data-call-tool="add_to_cart" data-args="' + addCartArgs + '" data-prompt="' + addCartPrompt + '" title="Add to cart">＋ Add</button>' +
             '<button style="flex:1;padding:6px 4px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid #E2E8F0;background:#fff;color:#475569;cursor:pointer;pointer-events:auto;font-family:inherit;"' +
                    ' data-call-tool="get_product" data-args="' + args + '" data-prompt="' + prompt + '" title="View details">Details</button>' +
-            '<button style="flex:1;padding:6px 4px;font-size:11px;font-weight:700;border-radius:6px;border:0;background:linear-gradient(135deg,#67E8F9,#818CF8 50%,#C084FC);color:#0B0F2A;cursor:pointer;pointer-events:auto;font-family:inherit;"' +
+            '<button style="flex:1;padding:6px 4px;font-size:11px;font-weight:700;border-radius:6px;border:0;background:linear-gradient(135deg,#3853E6,#1E3A8A);color:#fff;cursor:pointer;pointer-events:auto;font-family:inherit;"' +
                    ' data-call-tool="create_handoff" data-args="' + handoffArgs + '" data-prompt="' + buyPrompt + '" title="Checkout">↗ Buy</button>' +
           '</div>'
         ) : '';
