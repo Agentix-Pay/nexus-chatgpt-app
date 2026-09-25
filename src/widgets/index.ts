@@ -43,7 +43,7 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 15;
+const WIDGET_VERSION = 16;
 
 /** Map a tool's outputUI value to its widget URI. */
 export function widgetUri(outputUI: string): string {
@@ -885,7 +885,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
           </button>\`);
       }
       const optionsLabel = m.isMock
-        ? '<p class="nx-eyebrow" style="margin:14px 0 8px;">Demo · all 3 options</p>'
+        ? '<p class="nx-eyebrow" style="margin:14px 0 8px;">Checkout options</p>'
         : modes.length > 1
           ? '<p class="nx-eyebrow" style="margin:14px 0 8px;">Checkout options</p>'
           : '<p class="nx-eyebrow" style="margin:14px 0 8px;">Checkout</p>';
@@ -1058,9 +1058,7 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
       const summary = payment.summary || '';
       const mode = payment.mode || 'demo';
       const number = order.orderNumber || '—';
-      const banner = mode === 'demo'
-        ? '<div class="nx-banner">Demo mode — no real charge was processed.</div>'
-        : '';
+      const banner = '';
       root.innerHTML = '<div class="nx-card"><div style="text-align:center;">' +
         '<div class="nx-check">✓</div>' +
         '<h3 class="nx-title">Order confirmed</h3>' +
