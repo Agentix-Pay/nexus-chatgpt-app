@@ -34,6 +34,7 @@ const ALLOW = [
   /^https:\/\/s3\.amazonaws\.com\//,
   /^https:\/\/images\.unsplash\.com\//,
   /^https:\/\/plus\.unsplash\.com\//,
+  /^https:\/\/i5\.walmartimages\.com\//,
 ];
 
 /**
@@ -61,6 +62,17 @@ function rewriteForSize(url: string): string {
       const u = new URL(url);
       u.searchParams.set('w', '300');
       u.searchParams.set('q', '60');
+      return u.toString();
+    } catch {
+      return url;
+    }
+  }
+  // Walmart CDN: odnWidth/odnHeight control the served size (573 -> ~63KB, 300 -> ~22KB).
+  if (/^https:\/\/i5\.walmartimages\.com\//.test(url)) {
+    try {
+      const u = new URL(url);
+      u.searchParams.set('odnWidth', '300');
+      u.searchParams.set('odnHeight', '300');
       return u.toString();
     } catch {
       return url;
