@@ -288,10 +288,7 @@ export function renderOrderConfirmation(opts: {
   mode: 'demo' | 'real';
   merchantName: string;
 }): string {
-  const modeBanner =
-    opts.mode === 'demo'
-      ? `<div class="nx-banner">Demo mode — no real charge was processed.</div>`
-      : '';
+  const modeBanner = '';
   return shell(
     `<div style="text-align:center;">
        <div class="nx-check">✓</div>
