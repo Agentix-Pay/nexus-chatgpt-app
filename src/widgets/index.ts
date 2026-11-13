@@ -43,7 +43,7 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 17;
+const WIDGET_VERSION = 18;
 
 /** Map a tool's outputUI value to its widget URI. */
 export function widgetUri(outputUI: string): string {
@@ -421,7 +421,37 @@ window.addEventListener('message',(e)=>{
   }
   if(payload)safeRender(payload);
 },{passive:true});
-// Signal ready (harmless if ignored)
+// MCP Apps handshake: the spec (modelcontextprotocol/ext-apps, 2026-01-26)
+// requires the View to send ui/initialize and then ui/notifications/initialized
+// before the Host will send ANY further request/notification — including
+// ui/notifications/tool-result. Per the Sandbox section: "Host MUST NOT send
+// any request or notification to the View before it receives an initialized
+// notification." Without this, a strictly-compliant host can withhold tool
+// data forever, which looks like the panel never becoming ready. This is
+// additive — every existing fallback (window.openai polling, openai:set_globals,
+// the generic postMessage listener below) stays in place for hosts that don't
+// enforce the gate or don't implement the formal bridge at all.
+try{
+  const __initId = 'nx-init-' + Math.random().toString(36).slice(2);
+  const __onInitResult = (e) => {
+    const m = e.data;
+    if(!m || typeof m !== 'object' || m.jsonrpc !== '2.0' || m.id !== __initId) return;
+    if(!m.result && !m.error) return;
+    window.removeEventListener('message', __onInitResult);
+    try{
+      window.parent && window.parent.postMessage({jsonrpc:'2.0',method:'ui/notifications/initialized',params:{}},'*');
+    }catch(e2){}
+  };
+  window.addEventListener('message', __onInitResult, {passive:true});
+  window.parent && window.parent.postMessage({
+    jsonrpc:'2.0',
+    id: __initId,
+    method:'ui/initialize',
+    params:{appCapabilities:{tools:{listChanged:false},availableDisplayModes:['inline']}},
+  },'*');
+}catch(e){}
+// Signal ready (harmless if ignored) — legacy/non-standard, kept for any host
+// that expects it instead of (or in addition to) ui/notifications/initialized.
 try{window.parent&&window.parent.postMessage({jsonrpc:'2.0',method:'ui/ready'},'*');}catch(e){}
 // Debug overlay — gated behind ?debug=1 so the inspector doesn't flash on slow data.
 // If nothing arrived in 1.5s AND debug is on, dump what we can see.
