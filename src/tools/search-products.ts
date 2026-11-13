@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { withCore } from '../mcp-client.js';
-import { inlineImages } from '../lib/inline-image.js';
+import { resolveImages } from '../lib/inline-image.js';
 
 const inputSchema = z.object({
   merchantId: z.string().min(1).describe('The merchant to search within. Get this from list_merchants.'),
@@ -31,7 +31,7 @@ export const searchProductsTool = {
   annotations: { title: 'Search products', readOnlyHint: true, openWorldHint: false, destructiveHint: false },
   handler: async (
     input: z.infer<typeof inputSchema>,
-    ctx: { jwt?: string; fallbackApiKey?: string },
+    ctx: { jwt?: string; fallbackApiKey?: string; clientName?: string },
   ) => {
     // Fetch products + the merchant's display name over one core-MCP
     // connection — the cart widget needs merchantName for friendly display
@@ -66,8 +66,8 @@ export const searchProductsTool = {
       productsRes.data.data.map(async (p) => {
         const first = p.images?.[0];
         if (!first) return p;
-        const inlined = await inlineImages([first]);
-        return { ...p, images: [inlined[0] ?? first, ...p.images.slice(1)] };
+        const resolved = await resolveImages([first], ctx.clientName);
+        return { ...p, images: [resolved[0] ?? first, ...p.images.slice(1)] };
       }),
     );
     return {

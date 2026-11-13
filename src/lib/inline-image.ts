@@ -122,3 +122,42 @@ export async function inlineImage(url: string | null | undefined): Promise<strin
 export async function inlineImages(urls: string[]): Promise<string[]> {
   return Promise.all(urls.map((u) => inlineOne(u)));
 }
+
+// ── Claude-specific path ──────────────────────────────────────────────────
+// Claude renders tool results by having the model read the plain `content`
+// text and, when it chooses to, write a markdown image pointing at a real
+// https:// URL — it has no iframe to post a data: URL into, so a base64
+// blob just gets narrated as "a wall of characters" and left out. Inlining
+// also blows past what Claude will return in one response (~281K chars for
+// a 10-product search in practice, which Claude reported writing to a file
+// instead of returning directly). So for Claude we skip the fetch+base64
+// step entirely and hand back the same resized upstream URL rewritten to
+// go through our own /img-proxy — a short, real, publicly-fetchable link.
+const IMG_PROXY_ORIGIN = process.env['PUBLIC_BASE_URL'] ?? 'https://nexus.agentixpay.ai';
+
+function proxyOne(url: string): string {
+  if (!url || typeof url !== 'string') return '';
+  if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+  if (!ALLOW.some((re) => re.test(url))) return url; // pass through unrecognised
+  return `${IMG_PROXY_ORIGIN}/img-proxy?url=${encodeURIComponent(rewriteForSize(url))}`;
+}
+
+function isClaude(clientName?: string): boolean {
+  return typeof clientName === 'string' && /claude/i.test(clientName);
+}
+
+/**
+ * Tool handlers call this instead of inlineImage/inlineImages directly so
+ * the same code path serves ChatGPT (base64 data: URLs, for the iframe
+ * widget) and Claude (plain proxied https:// links, for markdown) without
+ * either host's behavior depending on the other's.
+ */
+export async function resolveImage(url: string | null | undefined, clientName?: string): Promise<string> {
+  if (isClaude(clientName)) return proxyOne(url ?? '');
+  return inlineOne(url ?? '');
+}
+
+export async function resolveImages(urls: string[], clientName?: string): Promise<string[]> {
+  if (isClaude(clientName)) return urls.map(proxyOne);
+  return Promise.all(urls.map((u) => inlineOne(u)));
+}

@@ -52,19 +52,27 @@ interface SessionContext {
   jwt?: string;
   fallbackApiKey?: string;
   sessionId?: string;
+  clientName?: string;
 }
 
-function getSessionContext(req: CallToolRequest, sessionId?: string): SessionContext {
+function getSessionContext(req: CallToolRequest, sessionId?: string, clientName?: string): SessionContext {
   // OpenAI Apps platform passes the user's JWT via _meta.bearer_token (subject
   // to change). The fallback ISV API key is read from env so unauthenticated
   // browse/search calls still work. sessionId is the MCP SSE session ID
-  // for this connection — used to key the per-conversation cart.
+  // for this connection — used to key the per-conversation cart. clientName
+  // is clientInfo.name from the MCP initialize handshake (e.g. "claude-ai") —
+  // tool handlers use it to decide how to send images back (see
+  // lib/inline-image.ts's resolveImage/resolveImages): ChatGPT's widget wants
+  // base64 data: URLs, Claude wants plain https:// links it can render as
+  // markdown directly, since it never gets an inline-image data: URL to work
+  // with and otherwise narrates the base64 blob as unshowable.
   const meta = (req.params._meta ?? {}) as Record<string, unknown>;
   const jwt = typeof meta['bearer_token'] === 'string' ? (meta['bearer_token'] as string) : undefined;
   return {
     jwt,
     fallbackApiKey: process.env['NEXUS_FALLBACK_API_KEY'] ?? undefined,
     sessionId,
+    clientName,
   };
 }
 
@@ -195,7 +203,7 @@ function buildServer(opts: { sessionId?: string } = {}): Server {
         isError: true,
       };
     }
-    const ctx = getSessionContext(req, opts.sessionId);
+    const ctx = getSessionContext(req, opts.sessionId, server.getClientVersion()?.name);
     try {
       const parsed = tool.inputSchema.parse(req.params.arguments ?? {});
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

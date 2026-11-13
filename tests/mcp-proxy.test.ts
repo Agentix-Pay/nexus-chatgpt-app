@@ -28,6 +28,9 @@ vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
 // inline-image hits the network for data URLs; stub it to a passthrough.
 vi.mock('../src/lib/inline-image.js', () => ({
   inlineImages: vi.fn(async (urls: string[]) => urls),
+  inlineImage: vi.fn(async (url: string) => url),
+  resolveImages: vi.fn(async (urls: string[]) => urls),
+  resolveImage: vi.fn(async (url: string) => url),
 }));
 
 import { listMerchantsTool } from '../src/tools/list-merchants.js';
