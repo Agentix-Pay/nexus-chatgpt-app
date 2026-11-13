@@ -162,7 +162,7 @@ function buildServer(opts: { sessionId?: string } = {}): Server {
       uri: `ui://widget/${name}.html`,
       name: `nexus-widget-${name}`,
       mimeType: RESOURCE_MIME,
-      _meta: widgetMeta(),
+      _meta: widgetMeta(server.getClientVersion()?.name),
     })),
   }));
 
@@ -181,7 +181,7 @@ function buildServer(opts: { sessionId?: string } = {}): Server {
           uri,
           mimeType: RESOURCE_MIME,
           text: widgetHtml(name as WidgetName),
-          _meta: widgetMeta(),
+          _meta: widgetMeta(server.getClientVersion()?.name),
         },
       ],
     };
