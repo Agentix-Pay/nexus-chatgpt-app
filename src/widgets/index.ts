@@ -55,7 +55,7 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 20;
+const WIDGET_VERSION = 21;
 
 /**
  * The resource URI for a given widget name, including the cache-busting
@@ -146,6 +146,7 @@ export function widgetMeta(clientName?: string): Record<string, unknown> {
           // Stock / placeholder libraries
           'https://images.unsplash.com',
           'https://i5.walmartimages.com',
+          'https://alliedcycleworks.com',
         ],
       },
     },

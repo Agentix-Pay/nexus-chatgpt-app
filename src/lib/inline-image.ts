@@ -35,6 +35,7 @@ const ALLOW = [
   /^https:\/\/images\.unsplash\.com\//,
   /^https:\/\/plus\.unsplash\.com\//,
   /^https:\/\/i5\.walmartimages\.com\//,
+  /^https:\/\/alliedcycleworks\.com\//,
 ];
 
 /**
@@ -73,6 +74,18 @@ function rewriteForSize(url: string): string {
       const u = new URL(url);
       u.searchParams.set('odnWidth', '300');
       u.searchParams.set('odnHeight', '300');
+      return u.toString();
+    } catch {
+      return url;
+    }
+  }
+  // Allied Cycle Works' own domain (alliedcycleworks.com) serves Shopify
+  // file assets via ?width=N — images were sourced at width=3000 (~318KB),
+  // way too large to base64-inline; 400px (~13.5KB) is plenty for a tile.
+  if (/^https:\/\/alliedcycleworks\.com\//.test(url)) {
+    try {
+      const u = new URL(url);
+      u.searchParams.set('width', '400');
       return u.toString();
     } catch {
       return url;

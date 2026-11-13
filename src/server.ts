@@ -337,6 +337,7 @@ a:hover{text-decoration:underline}
     /^https:\/\/images\.unsplash\.com\//,
     /^https:\/\/plus\.unsplash\.com\//,
     /^https:\/\/i5\.walmartimages\.com\//,
+    /^https:\/\/alliedcycleworks\.com\//,
   ];
   app.get('/img-proxy', async (req, res) => {
     const url = typeof req.query['url'] === 'string' ? req.query['url'] : '';
