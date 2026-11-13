@@ -55,7 +55,7 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 21;
+const WIDGET_VERSION = 22;
 
 /**
  * The resource URI for a given widget name, including the cache-busting
@@ -302,12 +302,30 @@ function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;',
 // the correct widget for the target tool instead.)
 function callTool(name,args,fallbackPrompt){
   const o=window.openai;
-  if(!o)return;
-  if(typeof o.sendFollowUpMessage==='function'&&fallbackPrompt){
+  if(o&&typeof o.sendFollowUpMessage==='function'&&fallbackPrompt){
     try{o.sendFollowUpMessage({prompt:fallbackPrompt});return;}catch(e){}
   }
-  // Only fall through to callTool if we have a tool name and no follow-up worked
-  if(name&&typeof o.callTool==='function'){
+  // Formal MCP Apps bridge equivalent (Claude and any other compliant host
+  // that doesn't polyfill window.openai — it's an OpenAI-specific
+  // compatibility alias, not something every host implements). ui/message
+  // is the View->Host spec method for sending a message into the
+  // conversation; the official SDK's app.sendMessage({role,content}) wraps
+  // exactly this. We send it raw since the widget has no SDK loaded.
+  // Previously this whole function bailed out immediately the moment
+  // window.openai was absent, so every button click on Claude did nothing
+  // at all — this is what "just loads, never responds" was.
+  if(fallbackPrompt){
+    try{
+      window.parent && window.parent.postMessage({
+        jsonrpc:'2.0',
+        method:'ui/message',
+        params:{role:'user',content:[{type:'text',text:fallbackPrompt}]},
+      },'*');
+      return;
+    }catch(e){}
+  }
+  // Last resort: direct tool call — only if a host object is present to call it on.
+  if(o&&name&&typeof o.callTool==='function'){
     try{o.callTool(name,args||{});}catch(e){}
   }
 }
