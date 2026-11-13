@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { callCore } from '../mcp-client.js';
-import { inlineImage } from '../lib/inline-image.js';
+import { resolveImage } from '../lib/inline-image.js';
 
 const inputSchema = z.object({
   merchantId: z.string().min(1).describe('The merchant whose categories to list. Get this from list_merchants.'),
@@ -21,7 +21,7 @@ export const listCategoriesTool = {
   annotations: { title: 'Browse categories', readOnlyHint: true, openWorldHint: false, destructiveHint: false },
   handler: async (
     input: z.infer<typeof inputSchema>,
-    ctx: { jwt?: string; fallbackApiKey?: string },
+    ctx: { jwt?: string; fallbackApiKey?: string; clientName?: string },
   ) => {
     const result = await callCore<{ data: Category[] }>(
       'list_categories',
@@ -37,7 +37,7 @@ export const listCategoriesTool = {
     const categories = await Promise.all(
       result.data.data.map(async (c) => ({
         ...c,
-        sampleImage: c.sampleImage ? await inlineImage(c.sampleImage) : c.sampleImage,
+        sampleImage: c.sampleImage ? await resolveImage(c.sampleImage, ctx.clientName) : c.sampleImage,
       })),
     );
     return { merchantId: input.merchantId, categories };

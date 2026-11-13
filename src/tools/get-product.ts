@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { withCore } from '../mcp-client.js';
-import { inlineImages } from '../lib/inline-image.js';
+import { resolveImages } from '../lib/inline-image.js';
 
 const inputSchema = z.object({
   merchantId: z.string().min(1),
@@ -15,7 +15,7 @@ export const getProductTool = {
   annotations: { title: 'Get product details', readOnlyHint: true, openWorldHint: false, destructiveHint: false },
   handler: async (
     input: z.infer<typeof inputSchema>,
-    ctx: { jwt?: string; fallbackApiKey?: string },
+    ctx: { jwt?: string; fallbackApiKey?: string; clientName?: string },
   ) => {
     // Fetch product + merchant over one core-MCP connection so the widget can
     // decide which checkout buttons to render based on merchant.checkoutMode.
@@ -53,7 +53,7 @@ export const getProductTool = {
     // network access for them. Same rationale as search_products.
     const product = productRes.data as { images?: string[] } & Record<string, unknown>;
     if (product.images && product.images.length > 0) {
-      product.images = await inlineImages(product.images);
+      product.images = await resolveImages(product.images, ctx.clientName);
     }
     return {
       product,

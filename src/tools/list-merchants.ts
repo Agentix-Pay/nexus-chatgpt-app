@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { callCore } from '../mcp-client.js';
-import { inlineImage } from '../lib/inline-image.js';
+import { resolveImage } from '../lib/inline-image.js';
 
 export interface Merchant {
   id: string;
@@ -19,7 +19,7 @@ export const listMerchantsTool = {
   annotations: { title: 'List stores', readOnlyHint: true, openWorldHint: false, destructiveHint: false },
   handler: async (
     _input: Record<string, never>,
-    ctx: { jwt?: string; fallbackApiKey?: string },
+    ctx: { jwt?: string; fallbackApiKey?: string; clientName?: string },
   ) => {
     const result = await callCore<{ data: Merchant[]; pagination?: unknown }>(
       'list_merchants',
@@ -39,7 +39,7 @@ export const listMerchantsTool = {
         id: m.id,
         displayName: m.displayName,
         checkoutMode: m.checkoutMode,
-        logo: m.logo ? await inlineImage(m.logo) : undefined,
+        logo: m.logo ? await resolveImage(m.logo, ctx.clientName) : undefined,
       })),
     );
     return { merchants };
