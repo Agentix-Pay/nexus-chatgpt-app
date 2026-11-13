@@ -25,7 +25,7 @@ import {
   isInitializeRequest,
   type CallToolRequest,
 } from '@modelcontextprotocol/sdk/types.js';
-import { WIDGET_NAMES, widgetUri, widgetHtml, widgetMeta, type WidgetName } from './widgets/index.js';
+import { WIDGET_NAMES, widgetUri, widgetResourceUri, widgetHtml, widgetMeta, type WidgetName } from './widgets/index.js';
 import express from 'express';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
@@ -167,7 +167,7 @@ function buildServer(opts: { sessionId?: string } = {}): Server {
 
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({
     resources: WIDGET_NAMES.map((name) => ({
-      uri: `ui://widget/${name}.html`,
+      uri: widgetResourceUri(name),
       name: `nexus-widget-${name}`,
       mimeType: RESOURCE_MIME,
       _meta: widgetMeta(server.getClientVersion()?.name),

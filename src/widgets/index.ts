@@ -55,7 +55,19 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 19;
+const WIDGET_VERSION = 20;
+
+/**
+ * The resource URI for a given widget name, including the cache-busting
+ * `?v=` suffix. Resources registered via `resources/list` MUST use this same
+ * string — a host that cross-checks a tool's declared `_meta.ui.resourceUri`
+ * against its own known resource list (rather than tolerating a query-string
+ * mismatch the way our own ReadResourceRequestSchema handler does) will
+ * refuse to display anything it doesn't recognize as an exact match.
+ */
+export function widgetResourceUri(name: WidgetName): string {
+  return `ui://widget/${name}.html?v=${WIDGET_VERSION}`;
+}
 
 /** Map a tool's outputUI value to its widget URI. */
 export function widgetUri(outputUI: string): string {
@@ -76,7 +88,7 @@ export function widgetUri(outputUI: string): string {
     CartView: 'cart-view',
   };
   const name = map[outputUI] ?? 'merchant-list';
-  return `ui://widget/${name}.html?v=${WIDGET_VERSION}`;
+  return widgetResourceUri(name);
 }
 
 /**
