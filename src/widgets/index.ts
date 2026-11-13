@@ -16,11 +16,23 @@
  * a fallback for non-iframe MCP hosts (Claude Desktop today, etc.).
  */
 
+import { createHash } from 'node:crypto';
+
 // The App's own public origin. Env-driven so each environment (dev/test/prod on
 // AWS, or Fly during migration) advertises the host it's actually served from —
 // ChatGPT reads this into the widget iframe domain + CSP. Falls back to the Fly
 // host only if PUBLIC_BASE_URL is unset.
 const WIDGET_DOMAIN = process.env['PUBLIC_BASE_URL'] ?? 'https://nexus.agentixpay.ai';
+
+// `_meta.ui.domain` (the iframe sandbox origin) is host-dependent per the MCP
+// Apps spec — there's no single value that satisfies every host. ChatGPT
+// accepts our own server origin (WIDGET_DOMAIN) directly. Claude requires a
+// specific derived value instead and will refuse to render the resource at
+// all ("There was a problem displaying content") if it doesn't match: the
+// first 32 hex chars of SHA-256(serverUrl) + '.claudemcpcontent.com', where
+// serverUrl is this server's own MCP endpoint. See
+// https://claude.com/docs/connectors/building/mcp-apps/cross-compatibility
+const CLAUDE_UI_DOMAIN = `${createHash('sha256').update(`${WIDGET_DOMAIN}/mcp`).digest('hex').slice(0, 32)}.claudemcpcontent.com`;
 
 export const WIDGET_NAMES = [
   'merchant-list',
@@ -43,7 +55,7 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 18;
+const WIDGET_VERSION = 19;
 
 /** Map a tool's outputUI value to its widget URI. */
 export function widgetUri(outputUI: string): string {
@@ -67,11 +79,17 @@ export function widgetUri(outputUI: string): string {
   return `ui://widget/${name}.html?v=${WIDGET_VERSION}`;
 }
 
-/** Per-widget _meta.ui block for resource registration (CSP, domain, etc.). */
-export function widgetMeta(): Record<string, unknown> {
+/**
+ * Per-widget _meta.ui block for resource registration (CSP, domain, etc.).
+ * `clientName` is the connecting MCP client's `clientInfo.name` (from
+ * `server.getClientVersion()`), used only to pick the right `domain` value —
+ * see CLAUDE_UI_DOMAIN above for why one value can't satisfy every host.
+ */
+export function widgetMeta(clientName?: string): Record<string, unknown> {
+  const isClaude = typeof clientName === 'string' && /claude/i.test(clientName);
   return {
     ui: {
-      domain: WIDGET_DOMAIN,
+      domain: isClaude ? CLAUDE_UI_DOMAIN : WIDGET_DOMAIN,
       csp: {
         connectDomains: [process.env['NEXUS_BASE_URL'] ?? 'https://nexus-api.agentixpay.ai'],
         // Image-host allowlist for product/category thumbnails.
