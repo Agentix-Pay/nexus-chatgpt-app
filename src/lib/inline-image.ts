@@ -36,6 +36,7 @@ const ALLOW = [
   /^https:\/\/plus\.unsplash\.com\//,
   /^https:\/\/i5\.walmartimages\.com\//,
   /^https:\/\/alliedcycleworks\.com\//,
+  /^https:\/\/cdn\.shopify\.com\//,
 ];
 
 /**
