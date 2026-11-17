@@ -55,7 +55,7 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 22;
+const WIDGET_VERSION = 23;
 
 /**
  * The resource URI for a given widget name, including the cache-busting
@@ -266,6 +266,15 @@ function proxyImg(u){
   if(!u||typeof u!=='string')return '';
   if(u.startsWith('data:')||u.startsWith('blob:'))return u;
   if(!u.startsWith('http'))return u;
+  // Claude's tool results already come back pre-proxied (see
+  // lib/inline-image.ts's resolveImage: Claude gets a real https:// link
+  // through our own /img-proxy, not a base64 data: URL, since Claude can't
+  // render inline data URIs). Wrapping that AGAIN here would ask /img-proxy
+  // to fetch a url param pointing at our own domain — which isn't in
+  // IMG_PROXY_ALLOWLIST (only external CDNs are), so the server 403'd and
+  // every image silently failed to load on Claude while working fine on
+  // ChatGPT (whose images arrive as data: URLs and skip this path entirely).
+  if(u.indexOf(IMG_PROXY)===0)return u;
   return IMG_PROXY + encodeURIComponent(u);
 }
 // Tracks the current merchant's currency so price formatting respects it. Set
@@ -300,34 +309,46 @@ function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;',
 // the merchants-empty branch and showed "No stores available" on every
 // Buy/Details/Add-to-cart click. sendFollowUpMessage lets the host mount
 // the correct widget for the target tool instead.)
+// Returns which path actually sent something, so the caller (__onActivate)
+// knows whether to expect this SAME view to be updated in place (ChatGPT,
+// via sendFollowUpMessage) or not (Claude's ui/message opens a NEW view for
+// the resulting tool call — this view never hears back, so it must not show
+// an infinite spinner waiting for an update that's never coming).
 function callTool(name,args,fallbackPrompt){
   const o=window.openai;
   if(o&&typeof o.sendFollowUpMessage==='function'&&fallbackPrompt){
-    try{o.sendFollowUpMessage({prompt:fallbackPrompt});return;}catch(e){}
+    try{o.sendFollowUpMessage({prompt:fallbackPrompt});return'openai';}catch(e){}
   }
   // Formal MCP Apps bridge equivalent (Claude and any other compliant host
   // that doesn't polyfill window.openai — it's an OpenAI-specific
   // compatibility alias, not something every host implements). ui/message
   // is the View->Host spec method for sending a message into the
-  // conversation; the official SDK's app.sendMessage({role,content}) wraps
-  // exactly this. We send it raw since the widget has no SDK loaded.
-  // Previously this whole function bailed out immediately the moment
-  // window.openai was absent, so every button click on Claude did nothing
-  // at all — this is what "just loads, never responds" was.
+  // conversation (modelcontextprotocol/ext-apps; Claude's own docs confirm
+  // app.sendMessage({role,content}) wraps exactly this, as a JSON-RPC
+  // REQUEST that resolves with {isError}). We send it raw since the widget
+  // has no SDK loaded — but it MUST carry an id like any other JSON-RPC
+  // request; a notification-shaped call (no id, as this sent before) has no
+  // id for the host to resolve, so Claude silently never acted on it. That
+  // was the actual cause of "it just sits there loading" — not a missing
+  // window.openai bailout (which was also a real, separate bug, now fixed
+  // below too).
   if(fallbackPrompt){
     try{
+      const __msgId='nx-msg-'+Math.random().toString(36).slice(2);
       window.parent && window.parent.postMessage({
         jsonrpc:'2.0',
+        id:__msgId,
         method:'ui/message',
         params:{role:'user',content:[{type:'text',text:fallbackPrompt}]},
       },'*');
-      return;
+      return'ui-message';
     }catch(e){}
   }
   // Last resort: direct tool call — only if a host object is present to call it on.
   if(o&&name&&typeof o.callTool==='function'){
-    try{o.callTool(name,args||{});}catch(e){}
+    try{o.callTool(name,args||{});return'openai';}catch(e){}
   }
+  return'none';
 }
 // (API inspector removed — debug surfaced what we needed, see git history.)
 function __showCallDebug(info){/* dev-only no-op now that clicks work */void info;}
@@ -352,18 +373,30 @@ function __onActivate(e){
   const promptText=t.getAttribute('data-prompt')||'';
   let args={};
   try{args=JSON.parse(t.getAttribute('data-args')||'{}');}catch(err){}
-  callTool(tool||null,args,promptText);
-  // Replace the widget content with a polished loading state immediately so
-  // the demo person gets instant visual confirmation. The tool call takes
-  // 2-5s (mostly ChatGPT GPT inference); leaving the previous widget visible
-  // makes that wait feel broken. This loading card stays until the new tool
-  // result lands and re-renders root via safeRender().
-  root.innerHTML = '<div class="nx-card" style="text-align:center;padding:48px 24px;">' +
-    '<div style="width:32px;height:32px;border-radius:50%;border:3px solid #E2E8F0;border-top-color:#818CF8;animation:spin 0.8s linear infinite;margin:0 auto 14px;"></div>' +
-    '<div style="font-size:14px;font-weight:600;color:#0F172A;margin-bottom:4px;">Loading…</div>' +
-    '<div style="font-size:12px;color:#64748B;">One moment</div>' +
-    '<style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>' +
-  '</div>';
+  const sentVia=callTool(tool||null,args,promptText);
+  if(sentVia==='openai'){
+    // ChatGPT: sendFollowUpMessage/callTool updates THIS SAME view in place
+    // once the tool result lands (via safeRender()). A spinner here is
+    // accurate — something is actually coming back to this iframe.
+    root.innerHTML = '<div class="nx-card" style="text-align:center;padding:48px 24px;">' +
+      '<div style="width:32px;height:32px;border-radius:50%;border:3px solid #E2E8F0;border-top-color:#818CF8;animation:spin 0.8s linear infinite;margin:0 auto 14px;"></div>' +
+      '<div style="font-size:14px;font-weight:600;color:#0F172A;margin-bottom:4px;">Loading…</div>' +
+      '<div style="font-size:12px;color:#64748B;">One moment</div>' +
+      '<style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>' +
+    '</div>';
+  } else if(sentVia==='ui-message'){
+    // Claude (and other non-OpenAI hosts): ui/message asks the Host to send
+    // a NEW message, which — if accepted — results in a brand new view for
+    // whatever tool gets called next. THIS view never hears back, so an
+    // infinite spinner here would be a lie. Say what actually happened.
+    root.innerHTML = '<div class="nx-card" style="text-align:center;padding:48px 24px;">' +
+      '<div style="font-size:28px;line-height:1;margin-bottom:10px;">✓</div>' +
+      '<div style="font-size:14px;font-weight:600;color:#0F172A;margin-bottom:4px;">Sent to the conversation</div>' +
+      '<div style="font-size:12px;color:#64748B;">Check below — you may need to approve or send it.</div>' +
+    '</div>';
+  }
+  // sentVia==='none': nothing worked (no host bridge at all); leave the
+  // current view as-is rather than show a misleading loading/sent state.
 }
 // Trigger OpenAI's native checkout sheet. Prototype — gracefully shows what
 // happened (sheet opened / not enabled / errored) so we know whether
@@ -496,8 +529,30 @@ try{
     jsonrpc:'2.0',
     id: __initId,
     method:'ui/initialize',
-    params:{appCapabilities:{tools:{listChanged:false},availableDisplayModes:['inline']}},
+    params:{appCapabilities:{tools:{listChanged:false},availableDisplayModes:['inline','fullscreen']}},
   },'*');
+}catch(e){}
+// Expand button → ui/request-display-mode. Per Claude's own MCP Apps docs,
+// this MUST be sent synchronously inside a click handler (a request with no
+// recent click/key press in the view is refused) — so this listener posts
+// directly, no SDK round-trip first. Hosts that don't support the method
+// (declaring only 'inline', e.g. today's ChatGPT Apps SDK surface) just
+// never respond; the button is a harmless no-op there, same as any other
+// unsupported raw postMessage call in this file.
+try{
+  const __expandBtn = document.getElementById('nx-expand');
+  if(__expandBtn){
+    __expandBtn.addEventListener('click', function(){
+      try{
+        window.parent && window.parent.postMessage({
+          jsonrpc:'2.0',
+          id: 'nx-dm-' + Math.random().toString(36).slice(2),
+          method:'ui/request-display-mode',
+          params:{mode:'fullscreen'},
+        }, '*');
+      }catch(e){}
+    });
+  }
 }catch(e){}
 // Signal ready (harmless if ignored) — legacy/non-standard, kept for any host
 // that expects it instead of (or in addition to) ui/notifications/initialized.
@@ -1299,6 +1354,7 @@ export function widgetHtml(name: WidgetName): string {
 <style>${SHARED_CSS}</style>
 </head>
 <body>
+<button id="nx-expand" title="Expand" aria-label="Expand view" style="position:fixed;top:6px;right:6px;z-index:9999;width:26px;height:26px;border-radius:6px;border:1px solid #E2E8F0;background:#fff;color:#475569;font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;">⤢</button>
 <div id="root">${spec.emptyHtml}</div>
 <script>
 ${POSTMSG_LISTENER}
