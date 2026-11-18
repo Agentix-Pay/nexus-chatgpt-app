@@ -12,6 +12,8 @@
  * re-fetched while the App stays warm.
  */
 
+import { WIDGET_ENABLED } from './config.js';
+
 const cache = new Map<string, { data: string; expires: number }>();
 // 24h TTL: long enough that even a quiet day between demo runs never lets
 // cache entries expire while the container is still warm. Combined with the
@@ -160,6 +162,13 @@ function isClaude(clientName?: string): boolean {
   return typeof clientName === 'string' && /claude/i.test(clientName);
 }
 
+// When the widget is off (see lib/config.ts), there's no iframe for anyone
+// to post a base64 data: URL into — every host needs a plain, real image
+// link for markdown instead, the same thing Claude already gets today.
+function wantsPlainLink(clientName?: string): boolean {
+  return isClaude(clientName) || !WIDGET_ENABLED;
+}
+
 /**
  * Tool handlers call this instead of inlineImage/inlineImages directly so
  * the same code path serves ChatGPT (base64 data: URLs, for the iframe
@@ -167,11 +176,11 @@ function isClaude(clientName?: string): boolean {
  * either host's behavior depending on the other's.
  */
 export async function resolveImage(url: string | null | undefined, clientName?: string): Promise<string> {
-  if (isClaude(clientName)) return proxyOne(url ?? '');
+  if (wantsPlainLink(clientName)) return proxyOne(url ?? '');
   return inlineOne(url ?? '');
 }
 
 export async function resolveImages(urls: string[], clientName?: string): Promise<string[]> {
-  if (isClaude(clientName)) return urls.map(proxyOne);
+  if (wantsPlainLink(clientName)) return urls.map(proxyOne);
   return Promise.all(urls.map((u) => inlineOne(u)));
 }
