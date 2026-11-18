@@ -55,7 +55,7 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 25;
+const WIDGET_VERSION = 26;
 
 /**
  * The resource URI for a given widget name, including the cache-busting
@@ -1247,6 +1247,52 @@ const WIDGETS: Record<WidgetName, WidgetSpec> = {
       const confirmLabel = document.getElementById('__nx_confirm_label');
       const confirmMeta = document.getElementById('__nx_confirm_meta');
       const hintEl = document.getElementById('__nx_hint');
+      // On non-OpenAI hosts (Claude), the anchor's target="_top" tries to
+      // navigate the TOP-LEVEL frame directly from inside a cross-origin
+      // sandboxed iframe — something the sandbox doesn't grant, and Claude
+      // appears to surface the failed attempt as a blocked popup rather than
+      // quietly no-opping. The MCP Apps spec has a purpose-built method for
+      // this exact case: ui/open-link, a request the Host handles itself
+      // (opening a real browser tab outside the iframe sandbox), so it isn't
+      // subject to the sandbox's popup/top-navigation restrictions at all.
+      // ChatGPT keeps using the plain anchor click below unchanged — it
+      // already works there.
+      if (secureLinkEl && !window.openai) {
+        secureLinkEl.addEventListener('click', function(e){
+          e.preventDefault();
+          const targetUrl = secureLinkEl.getAttribute('href') || '';
+          if (!targetUrl || targetUrl === '#') return;
+          const reqId = 'nx-open-' + Math.random().toString(36).slice(2);
+          let settled = false;
+          const timer = setTimeout(function(){
+            if (settled) return;
+            settled = true;
+            window.removeEventListener('message', onMsg);
+          }, 8000);
+          function onMsg(ev){
+            const m = ev.data;
+            if (!m || typeof m !== 'object' || m.jsonrpc !== '2.0' || m.id !== reqId) return;
+            settled = true;
+            clearTimeout(timer);
+            window.removeEventListener('message', onMsg);
+            // isError (host declined, e.g. blocked domain / user cancelled) — try
+            // a direct window.open as a last resort. It may also be blocked by
+            // the same sandbox restriction, but it's the only remaining option.
+            if (m.error || (m.result && m.result.isError)) {
+              try { window.open(targetUrl, '_blank'); } catch (e2) {}
+            }
+          }
+          window.addEventListener('message', onMsg, { passive: true });
+          try {
+            window.parent && window.parent.postMessage({
+              jsonrpc: '2.0',
+              id: reqId,
+              method: 'ui/open-link',
+              params: { url: targetUrl },
+            }, '*');
+          } catch (e3) {}
+        });
+      }
       if (secureLinkEl && confirmBtn && confirmLabel && confirmMeta && hintEl) {
         secureLinkEl.addEventListener('click', function(){
           confirmBtn.className = 'nx-btn nx-btn-primary';
