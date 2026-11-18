@@ -55,7 +55,7 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 23;
+const WIDGET_VERSION = 24;
 
 /**
  * The resource URI for a given widget name, including the cache-busting
@@ -353,6 +353,55 @@ function callTool(name,args,fallbackPrompt){
 // (API inspector removed — debug surfaced what we needed, see git history.)
 function __showCallDebug(info){/* dev-only no-op now that clicks work */void info;}
 window.callTool=callTool; // expose for any inline handlers
+// Direct tool call for non-OpenAI hosts, bypassing the conversation entirely.
+// This is the MCP Apps SDK's callServerTool, sent raw since the widget has no
+// SDK loaded: a plain 'tools/call' JSON-RPC REQUEST straight to the Host,
+// which proxies it to our own MCP server and resolves with the result —
+// no model turn, no approval prompt (unlike ui/message/sendMessage, which
+// Claude gates behind user consent by design). This only helps for tools
+// whose result this SAME widget instance already knows how to render (see
+// SAME_WIDGET_TOOLS below) — it doesn't solve navigating to a DIFFERENT
+// widget type (get_product/add_to_cart/create_handoff etc still need
+// ui/message, with its approval step; that's a Claude design constraint we
+// can't route around, not a bug in this file).
+function callServerToolRaw(name,args){
+  return new Promise(function(resolve,reject){
+    const id='nx-call-'+Math.random().toString(36).slice(2);
+    const timer=setTimeout(function(){
+      window.removeEventListener('message',onMsg);
+      reject(new Error('Request timed out'));
+    },15000);
+    function onMsg(e){
+      const m=e.data;
+      if(!m||typeof m!=='object'||m.jsonrpc!=='2.0'||m.id!==id)return;
+      clearTimeout(timer);
+      window.removeEventListener('message',onMsg);
+      if(m.error){reject(new Error((m.error&&m.error.message)||'Tool call failed'));return;}
+      resolve(m.result);
+    }
+    window.addEventListener('message',onMsg,{passive:true});
+    try{
+      window.parent && window.parent.postMessage({
+        jsonrpc:'2.0',
+        id:id,
+        method:'tools/call',
+        params:{name:name,arguments:args||{}},
+      },'*');
+    }catch(e){clearTimeout(timer);window.removeEventListener('message',onMsg);reject(e);}
+  });
+}
+// Tools whose result this widget's render() already knows how to display
+// (merchant-list's multi-state detection: merchants / categories / products).
+const SAME_WIDGET_TOOLS=['list_merchants','list_categories','search_products'];
+function __extractToolResult(result){
+  if(!result)return null;
+  if(result.structuredContent)return result.structuredContent;
+  const first=result.content&&result.content[0];
+  if(first&&first.type==='text'&&typeof first.text==='string'){
+    try{return JSON.parse(first.text);}catch(e){return null;}
+  }
+  return null;
+}
 // Delegated click/key handler. Tiles set data-call-tool, data-args (JSON), and
 // data-prompt. We listen once on the root and route to callTool. This avoids
 // inline onclick attributes that some iframe sandboxes/CSPs filter out.
@@ -373,6 +422,28 @@ function __onActivate(e){
   const promptText=t.getAttribute('data-prompt')||'';
   let args={};
   try{args=JSON.parse(t.getAttribute('data-args')||'{}');}catch(err){}
+  // Fast path for non-OpenAI hosts (Claude): navigation tools whose result
+  // THIS widget already knows how to render go straight through
+  // callServerTool — no conversation message, no approval prompt, same
+  // instant in-place update ChatGPT gets via sendFollowUpMessage. Only
+  // applies when window.openai is absent; ChatGPT keeps using its own path
+  // below since sendFollowUpMessage already works well there.
+  if(!window.openai && tool && SAME_WIDGET_TOOLS.indexOf(tool)!==-1){
+    root.innerHTML = '<div class="nx-card" style="text-align:center;padding:48px 24px;">' +
+      '<div style="width:32px;height:32px;border-radius:50%;border:3px solid #E2E8F0;border-top-color:#818CF8;animation:spin 0.8s linear infinite;margin:0 auto 14px;"></div>' +
+      '<div style="font-size:14px;font-weight:600;color:#0F172A;margin-bottom:4px;">Loading…</div>' +
+      '<style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>' +
+    '</div>';
+    callServerToolRaw(tool,args).then(function(result){
+      const sc=__extractToolResult(result);
+      if(!sc || !safeRender(sc)){
+        root.innerHTML='<div class="nx-card"><div class="nx-error">Couldn&rsquo;t load that. Try again.</div></div>';
+      }
+    }).catch(function(err){
+      root.innerHTML='<div class="nx-card"><div class="nx-error">'+escapeHtml(String(err&&err.message||err))+'</div></div>';
+    });
+    return;
+  }
   const sentVia=callTool(tool||null,args,promptText);
   if(sentVia==='openai'){
     // ChatGPT: sendFollowUpMessage/callTool updates THIS SAME view in place
