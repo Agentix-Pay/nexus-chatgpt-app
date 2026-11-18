@@ -35,6 +35,7 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import { tools } from './tools/index.js';
+import { WIDGET_ENABLED } from './lib/config.js';
 import {
   renderError,
   renderMerchantList,
@@ -184,6 +185,85 @@ function summarizeForChat(toolName: string, result: unknown): string {
   }
 }
 
+function fmtCents(cents: number | undefined, currency = 'USD'): string {
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format((cents ?? 0) / 100);
+  } catch {
+    return `$${((cents ?? 0) / 100).toFixed(2)}`;
+  }
+}
+
+/**
+ * Markdown chat text used in place of the widget when WIDGET_ENABLED=false
+ * (see lib/config.ts). Images here are real https:// links (resolveImage
+ * gives everyone the Claude-style plain link, not a base64 blob, whenever
+ * the widget is off), since ChatGPT's own chat markdown renders
+ * ![](https://...) inline but can't usefully render a giant data: URL.
+ * There are no real buttons without the widget — each listing ends with a
+ * plain-language cue for what to say next instead.
+ */
+function richTextForChat(toolName: string, result: unknown): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const r = result as any;
+  if (r?.error) return r.error.message ?? 'Something went wrong.';
+  const img = (url?: string) => (url ? `![](${url})\n` : '');
+  switch (toolName) {
+    case 'list_merchants': {
+      const merchants = r?.merchants ?? [];
+      if (!merchants.length) return 'No stores available right now.';
+      const lines = merchants.map((m: any) => `${img(m.logo)}**${m.displayName}**`);
+      return `**Stores:**\n\n${lines.join('\n\n')}\n\nSay a store's name to browse it.`;
+    }
+    case 'list_categories': {
+      const cats = r?.categories ?? [];
+      if (!cats.length) return 'No categories available.';
+      const lines = cats.map((c: any) => `${img(c.sampleImage)}**${c.name}** — ${c.productCount ?? 0} item${c.productCount === 1 ? '' : 's'}`);
+      return `**Categories:**\n\n${lines.join('\n\n')}\n\nSay a category name to see its products.`;
+    }
+    case 'search_products': {
+      const products = r?.products ?? [];
+      if (!products.length) return 'No products matched. Try a different category or search term.';
+      const lines = products.map((p: any) =>
+        `${img(p.images?.[0])}**${p.title}** — ${fmtCents(p.priceCents, p.currency)}${p.inventoryQuantity > 0 ? '' : ' (out of stock)'}`,
+      );
+      return `**${r.category || 'Products'}:**\n\n${lines.join('\n\n')}\n\nSay a product's name for details, "add [item] to cart", or "buy [item]".`;
+    }
+    case 'get_product': {
+      const p = r?.product ?? {};
+      if (!p.title) return 'Here are the product details.';
+      return `${img(p.images?.[0])}**${p.title}** — ${fmtCents(p.priceCents, p.currency)}\n\n${p.description ?? ''}\n\nSay "add to cart" or "buy this" to continue.`;
+    }
+    case 'add_to_cart': {
+      const cart = r?.cart ?? {};
+      return `Added to your cart. ${plural(r?.itemCount ?? 0, 'item')} in your ${cart.merchantName ?? 'cart'} cart — ${fmtCents(r?.subtotalCents, r?.currency)} subtotal.`;
+    }
+    case 'view_cart': {
+      const items = r?.cart?.items ?? [];
+      if (!items.length) return 'Your cart is empty.';
+      const lines = items.map((it: any) => `- ${it.title} × ${it.quantity} — ${fmtCents(it.priceCents * it.quantity, r?.currency)}`);
+      return `**Your cart:**\n\n${lines.join('\n')}\n\n**Subtotal: ${fmtCents(r?.subtotalCents, r?.currency)}**\n\nSay "checkout" to continue.`;
+    }
+    case 'create_handoff':
+    case 'checkout_cart':
+      return r?.checkoutUrl
+        ? `**Secure checkout link:** ${r.checkoutUrl}\n\nTotal: ${fmtCents(r?.totalCents, r?.currency)}. Once you've paid, say "did my order go through?" to confirm.`
+        : "Here's your secure checkout link.";
+    case 'create_checkout':
+    case 'complete_checkout':
+      return 'Checkout complete.';
+    case 'get_order_status':
+      return r?.order?.orderNumber
+        ? `Order **${r.order.orderNumber}**: ${r.order.status ?? 'status unavailable'}.`
+        : "Here's your order status.";
+    default:
+      return summarizeForChat(toolName, result);
+  }
+}
+
+function plural(n: number, s: string, p: string = s + 's'): string {
+  return `${n} ${n === 1 ? s : p}`;
+}
+
 /** Build the MCP server with tool handlers. Same instance can drive any transport. */
 function buildServer(opts: { sessionId?: string } = {}): Server {
   const server = new Server(
@@ -198,7 +278,7 @@ function buildServer(opts: { sessionId?: string } = {}): Server {
       inputSchema: zodToJsonSchema(t.inputSchema),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       annotations: (t as any).annotations,
-      _meta: { ui: { resourceUri: widgetUri(t.outputUI) } },
+      ...(WIDGET_ENABLED ? { _meta: { ui: { resourceUri: widgetUri(t.outputUI) } } } : {}),
     })),
   }));
 
@@ -254,14 +334,16 @@ function buildServer(opts: { sessionId?: string } = {}): Server {
       // structuredContent is the spec field ChatGPT posts to the iframe widget
       // via ui/notifications/tool-result. uiHtml stays as a fallback for
       // non-iframe MCP hosts (e.g. Claude Desktop with rich messages).
-      const uiHtml = renderUI(tool.outputUI, result);
+      const uiHtml = WIDGET_ENABLED ? renderUI(tool.outputUI, result) : null;
       return {
-        content: [{ type: 'text', text: summarizeForChat(tool.name, result) }],
+        content: [{
+          type: 'text',
+          text: WIDGET_ENABLED ? summarizeForChat(tool.name, result) : richTextForChat(tool.name, result),
+        }],
         structuredContent: result as Record<string, unknown>,
-        _meta: {
-          ui: { resourceUri: widgetUri(tool.outputUI) },
-          uiHtml: uiHtml ?? undefined,
-        },
+        ...(WIDGET_ENABLED
+          ? { _meta: { ui: { resourceUri: widgetUri(tool.outputUI) }, uiHtml: uiHtml ?? undefined } }
+          : {}),
       };
     } catch (err) {
       return {
