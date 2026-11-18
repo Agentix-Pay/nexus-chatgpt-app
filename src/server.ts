@@ -7,9 +7,12 @@
  *
  * Mode is controlled via `--transport=stdio|http` flag (defaults to stdio).
  * Tool responses include `_meta.uiHtml` (rendered HTML chunk for the inline
- * card) and `_meta.uiData` (structured payload) so MCP hosts that support
- * rich rendering get the polished UX, and hosts that don't fall back to the
- * `content[].text` JSON.
+ * card) and `structuredContent` (structured payload) so MCP hosts that
+ * support rich rendering (ChatGPT, Claude — both via the widget iframe) get
+ * the polished UX from that, not from `content[].text`. `content[].text` is
+ * deliberately a short caption (see summarizeForChat below), not the full
+ * data — the widget already shows it, so dumping the whole JSON there just
+ * gets echoed back as a second, redundant copy in the chat text.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -141,6 +144,46 @@ function renderUI(outputUI: string, result: unknown): string | null {
   }
 }
 
+/**
+ * A short, non-redundant line for the model to say in chat alongside the
+ * widget. The widget (structuredContent) already shows the full data
+ * visually — previously `content` carried the ENTIRE raw JSON result too,
+ * which the model would narrate back in prose, duplicating everything the
+ * widget just rendered (reported live: "ChatGPT is showing everything 2x,
+ * once in our app and once from chat itself"). Keep this terse; it's a
+ * caption, not a second copy of the data.
+ */
+function summarizeForChat(toolName: string, result: unknown): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const r = result as any;
+  if (r?.error) return r.error.message ?? 'Something went wrong.';
+  const plural = (n: number, s: string, p: string = s + 's') => `${n} ${n === 1 ? s : p}`;
+  switch (toolName) {
+    case 'list_merchants':
+      return `Found ${plural(r?.merchants?.length ?? 0, 'store')}.`;
+    case 'list_categories':
+      return `Found ${plural(r?.categories?.length ?? 0, 'category', 'categories')}.`;
+    case 'search_products':
+      return `Found ${plural(r?.products?.length ?? 0, 'product')}.`;
+    case 'get_product':
+      return r?.product?.title ? `Here's ${r.product.title}.` : 'Here are the product details.';
+    case 'add_to_cart':
+      return 'Added to your cart.';
+    case 'view_cart':
+      return `Your cart has ${plural(r?.itemCount ?? 0, 'item')}.`;
+    case 'create_handoff':
+    case 'checkout_cart':
+      return "Here's your secure checkout link.";
+    case 'create_checkout':
+    case 'complete_checkout':
+      return 'Checkout complete.';
+    case 'get_order_status':
+      return r?.order?.orderNumber ? `Order ${r.order.orderNumber}: ${r.order.status ?? 'status unavailable'}.` : "Here's your order status.";
+    default:
+      return 'Done.';
+  }
+}
+
 /** Build the MCP server with tool handlers. Same instance can drive any transport. */
 function buildServer(opts: { sessionId?: string } = {}): Server {
   const server = new Server(
@@ -213,7 +256,7 @@ function buildServer(opts: { sessionId?: string } = {}): Server {
       // non-iframe MCP hosts (e.g. Claude Desktop with rich messages).
       const uiHtml = renderUI(tool.outputUI, result);
       return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        content: [{ type: 'text', text: summarizeForChat(tool.name, result) }],
         structuredContent: result as Record<string, unknown>,
         _meta: {
           ui: { resourceUri: widgetUri(tool.outputUI) },
