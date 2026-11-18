@@ -35,7 +35,7 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import { tools } from './tools/index.js';
-import { WIDGET_ENABLED } from './lib/config.js';
+import { WIDGET_ENABLED, toolWantsWidget } from './lib/config.js';
 import {
   renderError,
   renderMerchantList,
@@ -278,7 +278,7 @@ function buildServer(opts: { sessionId?: string } = {}): Server {
       inputSchema: zodToJsonSchema(t.inputSchema),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       annotations: (t as any).annotations,
-      ...(WIDGET_ENABLED ? { _meta: { ui: { resourceUri: widgetUri(t.outputUI) } } } : {}),
+      ...(toolWantsWidget(t.name) ? { _meta: { ui: { resourceUri: widgetUri(t.outputUI) } } } : {}),
     })),
   }));
 
@@ -334,14 +334,20 @@ function buildServer(opts: { sessionId?: string } = {}): Server {
       // structuredContent is the spec field ChatGPT posts to the iframe widget
       // via ui/notifications/tool-result. uiHtml stays as a fallback for
       // non-iframe MCP hosts (e.g. Claude Desktop with rich messages).
-      const uiHtml = WIDGET_ENABLED ? renderUI(tool.outputUI, result) : null;
+      const useWidget = toolWantsWidget(tool.name);
+      const uiHtml = useWidget ? renderUI(tool.outputUI, result) : null;
       return {
         content: [{
           type: 'text',
+          // Cart/checkout tools (useWidget false even when WIDGET_ENABLED is
+          // true) still get the short caption, not richTextForChat's full
+          // markdown listing — richTextForChat is for when there's no visual
+          // display at all, but here ChatGPT's own native cart/checkout
+          // rendering already covers that; see NO_WIDGET_TOOLS in config.ts.
           text: WIDGET_ENABLED ? summarizeForChat(tool.name, result) : richTextForChat(tool.name, result),
         }],
         structuredContent: result as Record<string, unknown>,
-        ...(WIDGET_ENABLED
+        ...(useWidget
           ? { _meta: { ui: { resourceUri: widgetUri(tool.outputUI) }, uiHtml: uiHtml ?? undefined } }
           : {}),
       };
