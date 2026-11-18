@@ -55,7 +55,7 @@ export type WidgetName = (typeof WIDGET_NAMES)[number];
  * string, so appending `?v=N` to the URI is enough — the server-side resource
  * handler strips the query before matching.
  */
-const WIDGET_VERSION = 24;
+const WIDGET_VERSION = 25;
 
 /**
  * The resource URI for a given widget name, including the cache-busting
@@ -149,6 +149,16 @@ export function widgetMeta(clientName?: string): Record<string, unknown> {
           'https://alliedcycleworks.com',
         ],
       },
+      // Ask Claude to open this view in the side panel (or full screen where
+      // the panel can't open) right away, instead of the small inline card.
+      // Claude tries this once, after the view has started and the tool call
+      // returns without error — it isn't guaranteed (e.g. the side panel is
+      // already showing something else, or the user closed it earlier this
+      // conversation), so the manual expand button in the widget itself stays
+      // as a fallback. This is a Claude-specific extension to _meta.ui, not
+      // part of the MCP Apps spec — harmless for ChatGPT, which ignores it.
+      // https://claude.com/docs/connectors/building/mcp-apps/display-modes
+      ...(isClaude ? { preferredDisplayMode: 'fullscreen' } : {}),
     },
   };
 }
